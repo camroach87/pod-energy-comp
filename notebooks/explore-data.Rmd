@@ -27,9 +27,11 @@ Two elements to forecast: electricity demand and solar generation. Electricity d
 * Temperature data of 6 weather stations
 * Solar irradiance at 6 weather stations
 * Appropriate lags of weather data
+* Period of day
 * Day of week effects
 * Day of year effects
-* Holidays.
+* Holidays
+* Trend
 
 Solar generation will be dependent on:
 
@@ -42,7 +44,11 @@ However, since we don't have the panel solar irradiance or temperature during th
 
 ## Electricity demand
 
-Many papers already explore this.
+Many papers already explore this. Remember to
+
+* Fit model for each hour.
+* Compensate for daylight savings. Maybe separate hours?
+* Maybe separate models for summer + shoulders and winter + shoulders? Or just Summer separately since it's UK?
 
 ## PV generation
 
@@ -307,34 +313,71 @@ Looking at this analysis there doesn't appear to be a statistically significant 
 m2_pred_df %>% 
   select(datetime, pv_power_mw, pv_power_pred_2) %>% 
   pivot_longer(cols = -datetime, names_prefix = "pv_power_") %>% 
-  mutate(yday = yday(datetime)) %>% 
-  ggplot(aes(x = datetime, y = value, colour = name)) + 
-  geom_line() +
-  facet_wrap(~yday, scales = "free_x") +
-  theme(strip.background = element_blank(),
-        strip.text.x = element_blank())
+  mutate(date = date(datetime)) %>% 
+  ggplot(aes(x = datetime, y = value)) + 
+  geom_line(aes(colour = name)) +
+  # geom_text(aes(label = date(datetime)), x=Inf, y=Inf) +
+  facet_wrap(~date, scales = "free_x") +
+  # theme(strip.background = element_blank(),
+  #       strip.text.x = element_blank()) +
+  scale_x_datetime(date_labels = "%H:%M")
 ```
 
+
+Look at days where predictions are bad and try to understand why the generation has erratic drops. Most likely cloud coverage, so it will be interesting to look at daily profile of irradiance for two closest sites.
+
+```{r}
+gg_color_hue <- function(n) {
+  hues = seq(15, 375, length = n + 1)
+  hcl(h = hues, l = 65, c = 100)[1:n]
+}
+
+test_df %>% 
+  mutate(date = date(datetime)) %>% 
+  # filter(between(date, ymd("2018-06-12"), ymd("2018-06-14"))) %>% 
+  filter(date == ymd("2018-07-19")) %>% 
+  select(datetime, irradiance_Wm2_obs, panel_temp_C_obs, starts_with("solar"), starts_with("temp")) %>% 
+  pivot_longer(cols=-datetime) %>% 
+  separate(name, c("var", "location"), "_location") %>% 
+  mutate(location = case_when(var == "irradiance_Wm2_obs" ~ "panel",
+                              var == "panel_temp_C_obs" ~ "panel",
+                              TRUE ~ location),
+         var = case_when(var == "irradiance_Wm2_obs" ~ "solar",
+                         var == "panel_temp_C_obs" ~ "temp",
+                         TRUE ~ var)) %>% 
+  ggplot(aes(x = datetime, y = value, colour = location)) + 
+  geom_line() +
+  facet_wrap(~var, scales = "free_y") +
+  scale_colour_manual(values = c(gg_color_hue(6), "black"))
+```
+
+
+After checking some of the dates with poor predictions, I can't see an obvious relationship between lagged solar values at weather stations and large prediction errors. It looks more like there are just random spikes/dips in irradiance at the solar panels which doesn't occur at the stations. Sometimes it also looks like very high panel temperatures sometimes result in random drops in PV generation. Again, these high panel temperatures don't appear to have any obvious correlation with weather station temperatures.
 
 # Key modelling points
 
 ## PV generation
 
+* There appears to be interaction between temperature and irradiance variables. GBM accounts for interactions as long as depth > 1.
 * Need to forecast within limits (0-3.8?) for solar PV. Apparently it's a 5 MW solar farm but only 3.8 MW are produced at most due to system losses. Use historical max PV generation in order to determine appropriate upper bound.
-  * I suspect using an inverse logit link function and logistic regression may be the best way to proceed with this data.
-* Try interaction variable between irradiance and panel temperature.
-* If using GBM don't need to worry about forcing limits since tree based method will do this automatically (doesn't extrapolate).
+* GBM seems to predict < 0 values for generation. Quick fix: if PV gen < 0 set equal to 0.
 
 
+Enhancements after practice round: 
 
-## GBM
-
-* Unsurprisingly, GBM seems to work well for prediction. Should use it's out of bag error metrics for hyperparameter tuning to make fitting efficient.
-
-
-# TODO
-
-* Check if period of day improves model fit.
+* Period of day added, but need to check it really improves model fit.
+* GBM seems to predict < 0 values for generation. Not sure why this is happening, but may need to add in limits by transforming dependent variable.
 * Include lags as the current panel temperature (which effects PV generation) will be dependent on historical temperatures over last few hours. Will also will help to factor in cloud coverage (was irradiance low nearby recently?).
-* For PV prediction - include differences in temp and irradiance between sites? Maybe just use two closest sites for this.
-* Forecast within limits - transform response so that GBM only can predict within 0 and 3.8 (or max historical pv generation).
+* Maybe instead of lag, use change in values. Test to see which gives better results.
+* For PV prediction - include differences in temp and irradiance between sites? Maybe just use two closest sites (location 1 and 2) for this.
+
+
+## Electricity
+
+Just do something similar to what I've done before. Can fine tune after practice round.
+
+## TODO
+
+* Haven't considered daylight savings times. Need to look into this
+* GBM seems to work well for prediction. Should use it's out of bag error metrics for hyper-parameter tuning to make fitting efficient.
+
