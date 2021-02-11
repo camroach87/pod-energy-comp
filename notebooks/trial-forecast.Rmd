@@ -1,0 +1,159 @@
+---
+title: "Trial forecast"
+author: "Cameron Roach"
+date: "12/02/2021"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+library(tidyverse)
+library(gbm)
+library(lubridate)
+```
+
+## Load data
+
+```{r}
+demand_df <- read_csv("../inst/extdata/pod_ds_task0/demand_train_set0.csv") %>% 
+  rename_all(tolower) %>% 
+  mutate(wday = wday(datetime, label=T))
+
+weather_df <- read_csv("../inst/extdata/pod_ds_task0/weather_train_set0.csv")
+# interpolate from hourly to hh
+# TODO: interpolate instead of filling
+hh_dts <- seq(from=min(weather_df$datetime),
+              to=max(weather_df$datetime) + 1800,
+              by=1800)
+hh_dts <- data.frame(datetime = hh_dts)
+
+weather_df <- weather_df %>% 
+  na.omit() %>% 
+  full_join(hh_dts, by="datetime") %>% 
+  arrange(datetime) %>% 
+  fill(everything(), .direction = "down")  # TODO: interpolate linearly
+  
+  
+pv_df <- read_csv("../inst/extdata/pod_ds_task0/pv_train_set0.csv") %>% 
+  rename(irradiance_Wm2 = `irradiance_Wm-2`) %>% 
+  rename_all(tolower)
+
+
+fcst_dts <- ymd("2018-07-23") + days(0:6)
+  
+fcst_df <- weather_df %>% 
+  filter(date(datetime) %in% fcst_dts) %>% 
+  mutate(wday = wday(datetime, label=T))
+```
+
+## Fit models and forecast
+
+```{r}
+# PV
+pv.train <- pv_df %>% 
+  inner_join(weather_df, by="datetime") %>% 
+  select(pv_power_mw, matches("location[12]{1}")) %>% 
+  na.omit()
+pv.gbm <- gbm(data = pv.train,
+              formula = pv_power_mw ~ .,
+              n.trees = 200,
+              distribution = "gaussian",
+              shrinkage = 0.1,
+              interaction.depth = 5,
+              n.minobsinnode = 10,
+              bag.fraction = 0.5)
+fcst_df$pv_power_mw <- predict(pv.gbm, 
+                               newdata=fcst_df, 
+                               n.trees=pv.gbm$n.trees)
+# FIXME: implement better way to ensure pv > 0
+fcst_df$pv_power_mw <- if_else(fcst_df$pv_power_mw < 0, 0, fcst_df$pv_power_mw)
+
+# Demand
+# TODO: interpolate weather data for half-hourly
+# TODO: Add in period of day
+demand.train <- demand_df %>% 
+  inner_join(weather_df, by = "datetime") %>% 
+  mutate(period = 2*hour(datetime) + minute(datetime)/30 + 1) %>% 
+  filter(period %in% 32:42) %>%  # only predicting demand for periods of interest
+  select(demand_mw, wday, matches("location[12]{1}")) %>% 
+  na.omit()
+demand.gbm <- gbm(data = demand.train,
+              formula = demand_mw ~ .,
+              n.trees = 200,
+              distribution = "gaussian",
+              shrinkage = 0.1,
+              interaction.depth = 5,
+              n.minobsinnode = 10,
+              bag.fraction = 0.5)
+fcst_df$demand_mw <- predict(demand.gbm, 
+                             newdata=fcst_df, 
+                             n.trees=pv.gbm$n.trees)
+fcst_df <- fcst_df %>% 
+  mutate(period = 2*hour(datetime) + minute(datetime)/30 + 1) %>% 
+  mutate(demand_mw = if_else(!(period %in% 32:42), NA_real_, demand_mw))
+
+# Check
+fcst_df %>% 
+  select(datetime, demand_mw, pv_power_mw) %>% 
+  pivot_longer(-datetime) %>% 
+  ggplot(aes(x = datetime, y = value, colour = name)) +
+  geom_line()
+```
+
+## Schedule battery
+
+```{r}
+fday <- fcst_dts[1]
+
+
+fcst_df %>% 
+  group_by(date = date(datetime)) %>% 
+  summarise(pv_power_mw = 0.5*sum(pv_power_mw))
+
+# TODO: add test to make sure columns are correctly ordered 1:48
+P <- fcst_df %>% 
+  mutate(date = date(datetime)) %>% 
+  select(date, period, pv_power_mw) %>% 
+  pivot_wider(id_cols = date, names_from = period, values_from = pv_power_mw) %>% 
+  column_to_rownames("date") %>% 
+  as.matrix()
+B <- matrix(NA, nrow = 7, ncol = 48)
+dimnames(B) <- dimnames(P)
+
+# Charge battery ====================================================
+# Loop through each day and periods < 41 to charge battery
+# Ignoring early morning periods as less charge produced
+# TODO: fix so that battery can be fully charged taking a proportion of each periods PV gen to guard against under-forecasting PV
+for (iD in as.character(fcst_dts)) {
+  for (iP in 15:41) {
+    if (P[iD, iP] > 0) {
+      B[iD,iP] <- min(P[iD, iP], 2.5)
+    }
+    C_d <- sum(0.5*B[iD,], na.rm=T)  # 0.5 converts hh MW to MWh
+    if (C_d > 6) {
+      # reduce latest battery intake so that max charge not exceeded
+      B[iD,iP] <- B[iD,iP] - 2*(C_d - 6)
+      # stop charging battery
+      break
+    }
+  }
+}
+
+B[is.na(B)] <- 0
+matplot(t(B), type = "l")
+matplot(apply(t(B), 2, cumsum), type = "l")
+
+min(B) >= 0
+max(B) <= 2.5
+max(apply(t(B), 2, cumsum)) <= 12
+
+
+# Discharging battery to reduce peak demand =========================
+for (iD in as.character(fcst_dts)) {
+  for (iP in 32:42) {
+    # TODO: go back and store C_d as an array containing total battery charge for each day. Or maybe a matrix with charge for each period? Can then keep track of how much charge is left in battery.
+  }
+}
+```
+
