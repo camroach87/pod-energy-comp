@@ -13,9 +13,9 @@ library(betareg)
 library(gbm)
 library(lubridate)
 
-demand_df <- read_csv("../data/pod_ds_task0/demand_train_set0.csv")
-weather_df <- read_csv("../data/pod_ds_task0/weather_train_set0.csv")
-pv_df <- read_csv("../data/pod_ds_task0/pv_train_set0.csv") %>% 
+demand_df <- read_csv("../inst/extdata/pod_ds_task0/demand_train_set0.csv")
+weather_df <- read_csv("../inst/extdata/pod_ds_task0/weather_train_set0.csv")
+pv_df <- read_csv("../inst/extdata/pod_ds_task0/pv_train_set0.csv") %>% 
   rename(irradiance_Wm2 = `irradiance_Wm-2`) %>% 
   mutate(period = hour(datetime)*2 + minute(datetime)/30 + 1)
 ```
@@ -49,6 +49,27 @@ Many papers already explore this. Remember to
 * Fit model for each hour.
 * Compensate for daylight savings. Maybe separate hours?
 * Maybe separate models for summer + shoulders and winter + shoulders? Or just Summer separately since it's UK?
+
+```{r}
+demand_df %>% 
+  mutate(date = date(datetime),
+         period = 2*hour(datetime) + minute(datetime)/30 + 1) %>% 
+  ggplot(aes(x = period,
+             y = demand_MW,
+             colour = date,
+             group = date)) + 
+  geom_line()
+```
+
+```{r}
+demand_df %>% 
+  mutate(period = 2*hour(datetime) + minute(datetime)/30 + 1,
+         wday = wday(datetime, label=T)) %>% 
+  filter(period %in% 32:42) %>% 
+  ggplot(aes(x = wday, y = demand_MW)) + 
+  geom_boxplot()
+```
+
 
 ## PV generation
 
@@ -376,8 +397,12 @@ Enhancements after practice round:
 
 Just do something similar to what I've done before. Can fine tune after practice round.
 
+Will need to interpolate hourly weather data to half-hourly so that it can be joined up with half-hourly demand.
+
 ## TODO
 
 * Haven't considered daylight savings times. Need to look into this
 * GBM seems to work well for prediction. Should use it's out of bag error metrics for hyper-parameter tuning to make fitting efficient.
+* Need to interpolate weather data to half-hourly and then calculate period.
+* Make sure to use factor(period) if using it as a variable. Make sure factor levels match up if filtering the demand training data between 32 and 42 and then predicting on the unfiltered forecast data frame.
 
