@@ -223,4 +223,8 @@ bat_df %>%
 
 ## Output results
 
+```{r}
+write_csv(battery_df,
+          file = "../inst/extdata/pod_ds_task0/submission_template_set0")
+```
 
