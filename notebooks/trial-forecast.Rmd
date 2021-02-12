@@ -104,56 +104,123 @@ fcst_df %>%
 ## Schedule battery
 
 ```{r}
-fday <- fcst_dts[1]
-
-
-fcst_df %>% 
-  group_by(date = date(datetime)) %>% 
-  summarise(pv_power_mw = 0.5*sum(pv_power_mw))
-
 # TODO: add test to make sure columns are correctly ordered 1:48
 P <- fcst_df %>% 
   mutate(date = date(datetime)) %>% 
   select(date, period, pv_power_mw) %>% 
-  pivot_wider(id_cols = date, names_from = period, values_from = pv_power_mw) %>% 
+  pivot_wider(id_cols = date, 
+              names_from = period, 
+              values_from = pv_power_mw) %>% 
   column_to_rownames("date") %>% 
   as.matrix()
-B <- matrix(NA, nrow = 7, ncol = 48)
-dimnames(B) <- dimnames(P)
+B <- C <- matrix(0, nrow = 7, ncol = 48, dimnames = dimnames(P))
 
 # Charge battery ====================================================
 # Loop through each day and periods < 41 to charge battery
 # Ignoring early morning periods as less charge produced
-# TODO: fix so that battery can be fully charged taking a proportion of each periods PV gen to guard against under-forecasting PV
+# TODO: fix so that battery can be fully charged taking a proportion of each periods PV gen to guard against under-forecasting PV. Charging as soon as possible risks taking in grid demand. If there is heaps of PV probably going to be produced later - just spread out the load a bit!
+# Just using a naive method (scaling). See sc_fctr
+c_idx <- 2:31  # charging period indices
 for (iD in as.character(fcst_dts)) {
-  for (iP in 15:41) {
-    if (P[iD, iP] > 0) {
-      B[iD,iP] <- min(P[iD, iP], 2.5)
+  # Total solar expected
+  P_tot <- sum(P[iD,c_idx])
+  sc_fctr <- 12/P_tot  # FIXME: this forces the battery to be fully charged and will take in grid demand potentially.
+  
+  for (iP in c_idx) {
+    if (P[iD,iP] > 0) {
+      B[iD,iP] <- min(sc_fctr*P[iD, iP], 2.5)
+      C[iD,iP+1] <- C[iD,iP] + 0.5*B[iD,iP]  # 0.5 converts MW to MWh
+      
+      # check constraints
+      if (C[iD,iP+1] > 6) {
+        # FIXME: some rounding errors introduced when correcting for C > 6 MWh
+        B[iD,iP] <- 2*(6 - C[iD,iP])
+        C[iD,iP+1] <- 6
+      } 
     }
-    C_d <- sum(0.5*B[iD,], na.rm=T)  # 0.5 converts hh MW to MWh
-    if (C_d > 6) {
-      # reduce latest battery intake so that max charge not exceeded
-      B[iD,iP] <- B[iD,iP] - 2*(C_d - 6)
-      # stop charging battery
+  }
+}
+
+# FIXME: some rounding errors introduced when correcting for C > 6 MWh
+matplot(t(B), type = "l")
+matplot(t(C), type = "l")
+table(C[,2:32] == 0.5*t(apply(B, 1, cumsum))[,1:31])
+table(abs(C[,2:32] - 0.5*t(apply(B, 1, cumsum))[,1:31]) < 1e-12)
+min(B, na.rm=T) >= 0
+max(B, na.rm=T) <= 2.5
+max(apply(t(B[,1:31]), 2, cumsum)) <= 12
+max(apply(t(B[,1:31]), 2, cumsum)) - 12
+
+
+# Discharging battery to reduce peak demand =========================
+# TODO: Optimise this - more discharge during expected peak, etc.
+# Currently using naive method - just taking max charge and evenly spreading across 32:42
+# Have a look at how scaling for PV was done. Just grab demand, subtract the min and work out a scaling factor based on how much charge is available.
+d_idx <- 32:42  # discharge period indices
+for (iD in as.character(fcst_dts)) {
+  # MW of battery discharge over hh
+  dschrg_mw <- 2*C[iD,min(d_idx)]/length(d_idx)
+  for (iP in d_idx) {
+    if (C[iD,iP] > 0) {
+      B[iD,iP] <- -1 * min(2.5, dschrg_mw)
+      C[iD,iP+1] <- C[iD,iP] + 0.5*B[iD,iP]
+    } else if (C[iD,iP] == 0) {
+      # battery completely discharged so move to next day
+      B[iD,iP:max(d_idx)] <- C[iD,(iP+1):(max(d_idx)+1)] <- 0
       break
     }
   }
 }
 
-B[is.na(B)] <- 0
+B[,43:48] <- 0
+C[,44:48] <- C[,43]
+
+# checks
 matplot(t(B), type = "l")
-matplot(apply(t(B), 2, cumsum), type = "l")
-
-min(B) >= 0
+matplot(t(C), type = "l")
+table(C[,2:32] == 0.5*t(apply(B, 1, cumsum))[,1:31])
+table(abs(C[,2:32] - 0.5*t(apply(B, 1, cumsum))[,1:31]) < 1e-12)
 max(B) <= 2.5
-max(apply(t(B), 2, cumsum)) <= 12
-
-
-# Discharging battery to reduce peak demand =========================
-for (iD in as.character(fcst_dts)) {
-  for (iP in 32:42) {
-    # TODO: go back and store C_d as an array containing total battery charge for each day. Or maybe a matrix with charge for each period? Can then keep track of how much charge is left in battery.
-  }
-}
+min(B) >= -2.5
+max(C) <= 6
+min(C) == 0
 ```
+
+
+
+# Reformat
+
+```{r}
+bat_df <- B %>% 
+  as_tibble(rownames = "date") %>% 
+  pivot_longer(cols = -date,
+               names_to = "period", 
+               values_to = "charge_MW") %>% 
+  mutate(period = as.numeric(period),
+         datetime = as_datetime(date) + minutes(30*(period-1))) %>% 
+  arrange(datetime) %>% 
+  mutate(`_id` = row_number()) %>% 
+  select(`_id`, datetime, charge_MW)
+
+bla <- bat_df %>% group_by(date = date(datetime)) %>% mutate(cumsum_charge_MW = cumsum(charge_MW))
+max(bla$cumsum_charge_MW) - 12 == 0
+
+ggplot(bat_df, aes(x = datetime, y = charge_MW)) + 
+  geom_line()
+
+bat_df %>% 
+  inner_join(fcst_df, by = "datetime") %>% 
+  mutate(demand_red_mw = demand_mw,
+         demand_red_mw = if_else(period %in% d_idx,
+                                 demand_mw + charge_MW,
+                                 demand_mw)) %>% 
+  select(datetime, demand_mw, demand_red_mw) %>% 
+  pivot_longer(cols = -datetime) %>% 
+  ggplot(aes(x = datetime, y = value, colour = name)) +
+  geom_line() +
+  ylim(0, NA)
+```
+
+## Output results
+
 
