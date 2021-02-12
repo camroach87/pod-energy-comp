@@ -224,7 +224,7 @@ bat_df %>%
 ## Output results
 
 ```{r}
-write_csv(battery_df,
-          file = "../inst/extdata/pod_ds_task0/submission_template_set0")
+write_csv(bat_df,
+          file = "../inst/extdata/pod_ds_task0/Cameron_set0.csv")
 ```
 
