@@ -124,15 +124,22 @@ L <- fcst_df %>%
 B <- C <- matrix(0, nrow = 7, ncol = 48, dimnames = dimnames(P))
 
 # Charge battery ====================================================
-# Loop through each day and periods < 41 to charge battery
-# Ignoring early morning periods as less charge produced
-# TODO: fix so that battery can be fully charged taking a proportion of each periods PV gen to guard against under-forecasting PV. Charging as soon as possible risks taking in grid demand. If there is heaps of PV probably going to be produced later - just spread out the load a bit!
-# Just using a naive method (scaling). See sc_fctr
+# Loop through each day and periods < 41 to charge battery. Takes a proportion
+# of solar PV produced at each period step so that all charges add up to battery
+# capacity.
+# TODO: Instead of taking the same proportion at each step, proportion could be
+# based on % variance of residuals. Periods of day with more reliable
+# predictions can take in more solar as there is less risk. Same idea could
+# probably apply to reducing the peak - focus on more confident high peak times,
+# perhaps?
 c_idx <- 2:31  # charging period indices
 for (iD in as.character(fcst_dts)) {
   # Total solar expected
   P_tot <- sum(P[iD,c_idx])
-  sc_fctr <- 12/P_tot  # FIXME: this forces the battery to be fully charged and will take in grid demand potentially.
+  # NB: this forces the battery to be fully charged and will take in grid demand
+  # if not enough solar. However, score is improved the more the battery is
+  # charged so that is ok.
+  sc_fctr <- 12/P_tot
   
   for (iP in c_idx) {
     if (P[iD,iP] > 0) {
@@ -161,9 +168,15 @@ max(apply(t(B[,1:31]), 2, cumsum)) - 12
 
 
 # Discharging battery to reduce peak demand =========================
-# TODO: Add test to make sure peak profile is concave. Need to figure out what to do if there are sudden dips in probile - not sure this method will work properly. See notes in notebook.
-# NB: I think this will only be an issue if the new peak is higher than the min demand of old profile. If new peak is below old profile all battery discharge values will be negative over d_idx as required.
-# TODO: Also add tests to make sure constraints aren't violated should non-convex profile be predicted.
+# TODO: Add test to make sure peak profile is concave. Need to figure out what
+# to do if there are sudden dips in probile - not sure this method will work
+# properly. See notes in notebook. NB: I think this will only be an issue if the
+# new peak is higher than the min demand of old profile. If new peak is below
+# old profile all battery discharge values will be negative over d_idx as
+# required. So, can probably just add a test to see if the new peak is above any
+# of the old profile demand values.
+# TODO: Also add tests to make sure constraints aren't violated should
+# non-convex profile be predicted.
 d_idx <- 32:42  # discharge period indices
 for (iD in as.character(fcst_dts)) {
   # Subtracts 6 MWh from peak giving flat profile over d_idx periods
