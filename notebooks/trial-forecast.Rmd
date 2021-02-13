@@ -113,6 +113,14 @@ P <- fcst_df %>%
               values_from = pv_power_mw) %>% 
   column_to_rownames("date") %>% 
   as.matrix()
+L <- fcst_df %>% 
+  mutate(date = date(datetime)) %>% 
+  select(date, period, demand_mw) %>% 
+  pivot_wider(id_cols = date, 
+              names_from = period, 
+              values_from = demand_mw) %>% 
+  column_to_rownames("date") %>% 
+  as.matrix()
 B <- C <- matrix(0, nrow = 7, ncol = 48, dimnames = dimnames(P))
 
 # Charge battery ====================================================
@@ -153,15 +161,16 @@ max(apply(t(B[,1:31]), 2, cumsum)) - 12
 
 
 # Discharging battery to reduce peak demand =========================
-# TODO: Optimise this - more discharge during expected peak, etc.
-# Currently using naive method - just taking max charge and evenly spreading across 32:42
-# Have a look at how scaling for PV was done. Just grab demand, subtract the min and work out a scaling factor based on how much charge is available.
+# TODO: Add test to make sure peak profile is concave. Need to figure out what to do if there are sudden dips in probile - not sure this method will work properly. See notes in notebook.
+# NB: I think this will only be an issue if the new peak is higher than the min demand of old profile. If new peak is below old profile all battery discharge values will be negative over d_idx as required.
+# TODO: Also add tests to make sure constraints aren't violated should non-convex profile be predicted.
 d_idx <- 32:42  # discharge period indices
 for (iD in as.character(fcst_dts)) {
-  # MW of battery discharge over hh
-  dschrg_mw <- 2*C[iD,min(d_idx)]/length(d_idx)
+  # Subtracts 6 MWh from peak giving flat profile over d_idx periods
+  new_peak_mw <- (sum(L[iD,d_idx]) - 12)/length(d_idx)
   for (iP in d_idx) {
     if (C[iD,iP] > 0) {
+      dschrg_mw <- L[iD,iP] - new_peak_mw
       B[iD,iP] <- -1 * min(2.5, dschrg_mw)
       C[iD,iP+1] <- C[iD,iP] + 0.5*B[iD,iP]
     } else if (C[iD,iP] == 0) {
@@ -184,6 +193,8 @@ max(B) <= 2.5
 min(B) >= -2.5
 max(C) <= 6
 min(C) == 0
+all(B[,d_idx] <= 0)
+all(B[,c_idx] >= 0)
 ```
 
 
