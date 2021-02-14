@@ -53,13 +53,31 @@ Many papers already explore this. Remember to
 ```{r}
 demand_df %>% 
   mutate(date = date(datetime),
-         period = 2*hour(datetime) + minute(datetime)/30 + 1) %>% 
+         period = 2*hour(datetime) + minute(datetime)/30 + 1,
+         yymm = strftime(datetime, format = "%y%m")) %>% 
   ggplot(aes(x = period,
              y = demand_MW,
              colour = date,
              group = date)) + 
-  geom_line()
+  geom_line() + 
+  facet_wrap(~yymm) +
+  xlim(31, 43)
 ```
+
+
+```{r}
+demand_df %>% 
+  mutate(date = date(datetime),
+         period = 2*hour(datetime) + minute(datetime)/30 + 1,
+         yymm = strftime(datetime, format = "%y%m")) %>% 
+  ggplot(aes(x = period,
+             y = demand_MW,
+             colour = yymm,
+             group = yymm)) + 
+  geom_smooth(se = F) +
+  xlim(31, 43)
+```
+
 
 ```{r}
 demand_df %>% 
