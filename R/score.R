@@ -26,7 +26,7 @@ score_fcst_file <- function(file) {
     select(-`_id`) %>% 
     rename_all(tolower) %>% 
     mutate(
-      period = hour(datetime)*2 + minute(datetime)/30 + 1,
+      period = hh_to_period(datetime),
       date = date(datetime)
     )
   
