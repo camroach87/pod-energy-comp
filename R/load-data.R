@@ -7,15 +7,21 @@
 #'   include. Possible values are 1-6.
 #' @param inc_pv_cond (logical) If true, irradiance at PV facility
 #'   (irradiance_wm2) and panel temperature (panel_temp_c) are also returned.
+#' @param lags (list) List of lags to include for each variable variables.
+#'   Element name should be variable and numeric values will give lags. Lags
+#'   should be specified as number of half-hourly periods, e.g., c(1, 3, 5) will
+#'   create 30, 90 and 150 minute lags.
 #'
-#' @return Data frame containing all joined data.
+#' @return Data frame.
 #' @export
 #'
-#' @importFrom readr read_csv cols col_datetime col_double 
+#' @importFrom readr read_csv cols col_datetime col_double
 #' @importFrom dplyr select rename mutate bind_cols left_join full_join
+#' @importFrom tidyselect peek_vars
 #' @importFrom purrr map set_names
 #' @importFrom lubridate ymd
-load_data <- function(path, locations = 1:6, inc_pv_cond = F) {
+load_data <- function(path, locations = 1:6, inc_pv_cond = F,
+                      lags = NULL) {
   # file names have different integers at end depending on batch release
   files <- list.files(path)
   files <- c("demand", "weather", "pv") %>% 
@@ -84,7 +90,26 @@ load_data <- function(path, locations = 1:6, inc_pv_cond = F) {
   
   combine_df <- demand_df %>% 
     full_join(pv_df, by = "datetime") %>% 
-    left_join(weather_df, by = "datetime")
+    full_join(weather_df, by = "datetime") %>% 
+    arrange(datetime)
+  
+  # Add lags
+  lag_list <- list()
+  if (!is.null(lags)) {
+    for (i in seq_along(lags)) {
+      lag_list[[i]] <- map(
+        lags[[i]],
+        ~ lag(getElement(combine_df, names(lags)[i]), n = .x)
+      )
+      names(lag_list[[i]]) <- paste0(names(lags)[i], "_lag", lags[[i]])
+    }
+  }
+  
+  # Tidy output
+  combine_df <- combine_df %>% 
+    bind_cols(lag_list) %>%                           # add lags
+    filter(datetime >= min(demand_df$datetime)) %>%   # remove pre-demand data
+    select(datetime, sort(peek_vars()))
   
   combine_df
 }
