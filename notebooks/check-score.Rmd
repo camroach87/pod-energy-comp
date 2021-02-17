@@ -1,0 +1,76 @@
+---
+title: "Check score"
+author: "Cameron Roach"
+date: "17/02/2021"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+library(tidyverse)
+library(lubridate)
+library(podEnergyComp)
+
+fcst_0 <- read_csv("../inst/extdata/pod_ds_task0/Cameron_set0.csv") %>%
+  select(-`_id`) %>% 
+  rename_all(tolower) %>% 
+  mutate(
+    period = hour(datetime)*2 + minute(datetime)/30 + 1,
+    date = date(datetime)
+  )
+act_0 <- load_data("../inst/extdata/pod_ds_task1/",
+                    locations = 1:2) %>% 
+  select(datetime, demand_mw, pv_power_mw)
+fcst_0 <- inner_join(fcst_0, act_0, by = "datetime") %>% 
+  mutate(
+    demand_adj_mw = demand_mw + charge_mw
+  )
+```
+
+
+
+Note that PV generation is not considered when calculating peak reduction in this competition. Only use grid demand plus battery discharge. So don't subtract PV gen from grid demand when doing these calculations.
+
+## Plot
+
+```{r}
+fcst_0 %>% 
+  # filter(date(datetime) == ymd("2018-07-29")) %>% 
+  select(date, datetime, ends_with("_mw")) %>% 
+  pivot_longer(-c(date, datetime)) %>% 
+  ggplot(aes(x = datetime, y = value, colour = name)) + 
+  geom_line() +
+  facet_wrap(~date, scales = "free_x") +
+  theme(legend.position = "none")
+```
+
+
+## Check score
+
+```{r}
+prop_df <- fcst_0 %>% 
+  filter(period %in% 1:31) %>% 
+  mutate(p_dk = case_when(
+    (pv_power_mw > charge_mw) & (charge_mw != 0) ~ charge_mw, 
+    pv_power_mw < charge_mw ~ pv_power_mw,
+    charge_mw == 0 ~ 0
+  )) %>% 
+  group_by(date) %>% 
+  summarise(p_d1 = sum(p_dk)/sum(charge_mw)) %>% 
+  mutate(p_d2 = 1 - p_d1)
+
+score_df <- fcst_0 %>% 
+  filter(period %in% 32:42) %>% 
+  group_by(date) %>% 
+  summarise(peak_old_mw = max(demand_mw),
+            peak_new_mw = max(demand_adj_mw)) %>% 
+  inner_join(prop_df, by = "date") %>% 
+  mutate(r = 100*(peak_old_mw - peak_new_mw)/peak_old_mw,
+         s = r*(3*p_d1 + 1*p_d2))
+
+score_df$s
+```
+
+
+
