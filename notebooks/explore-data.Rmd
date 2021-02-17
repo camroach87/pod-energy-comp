@@ -32,11 +32,13 @@ Two elements to forecast: electricity demand and solar generation. Electricity d
 * Day of year effects
 * Holidays
 * Trend
+* Last week's demand (7-day lags).
 
-Solar generation will be dependent on:
+Solar generation dependent variables:
 
 * Solar irradiance
-* Panel temperature.
+* Panel temperature
+* Last week's PV generation (7-day lags).
 
 However, since we don't have the panel solar irradiance or temperature during the forecast period we may need to estimate these values using weather station data. Alternatively, we may only explore the relationship between PV generation and the surrounding weather stations (i.e. ignore panel irradiance and temperature data).
 
