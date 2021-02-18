@@ -7,9 +7,7 @@
 score_fcst_file(file)
 }
 \arguments{
-\item{fcst}{(chr) File containing forecasts in competition format.}
-
-\item{task}{(int) Forecast task number (0-5).}
+\item{file}{(chr) File containing forecasts in competition format.}
 }
 \value{
 Named vector with scores for each date.

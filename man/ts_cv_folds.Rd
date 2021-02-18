@@ -22,6 +22,7 @@ List with train and test elements for each iteration.
 Get cross validation folds for time series
 }
 \examples{
+library(lubridate)
 dts <- ymd("2020-01-01") + minutes(30)*0:(48*14-1)
 cv_folds <- ts_cv_folds(dts, ymd("2020-01-07"), 2, 3)
 }

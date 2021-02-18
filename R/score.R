@@ -2,8 +2,7 @@
 #'
 #' Scores forecasts.
 #'
-#' @param fcst (chr) File containing forecasts in competition format.
-#' @param task (int) Forecast task number (0-5).
+#' @param file (chr) File containing forecasts in competition format.
 #'
 #' @importFrom readr read_csv cols col_double col_datetime
 #' @importFrom dplyr select rename_all mutate filter group_by summarise
