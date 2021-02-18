@@ -1,0 +1,129 @@
+---
+title: "Fit demand model"
+author: "Cameron Roach"
+date: "17/02/2021"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+library(tidyverse)
+library(lubridate)
+library(lightgbm)
+library(podEnergyComp)
+
+c_idx <- 1:31
+d_idx <- 32:42
+```
+
+## Engineer features
+
+Using separate data frames for PV and demand. Experimenting with 6 weather stations for demand, but may want to test if only four land locations are useful. Confident that PV only affected by closest two weather stations (location 1 and 2). However, should probably do a proper test with all 6 stations again, similar to demand.
+
+## TODO
+
+* Still need to add public holidays. However, may not be allowed.
+* Should wday be converted to dummy variables? Check what happens when predicting using wday only as a variable.
+
+```{r}
+# Load all data and lags. Then split into the different training sets for models.
+pod_df <- load_data(
+  "../inst/extdata/pod_ds_task0",
+  locations = 1:6,
+  lags = list(
+    "demand_mw" = 48*7,
+    "pv_power_mw" = 48*7,
+    "temp_location1" = c(2,6,12,24,48,96),
+    "temp_location2" = c(2,6,12,24,48,96),
+    "temp_location3" = c(2,6,12,24,48,96),
+    "temp_location4" = c(2,6,12,24,48,96),
+    "temp_location5" = c(2,6,12,24,48,96),
+    "temp_location6" = c(2,6,12,24,48,96),
+    "solar_location1" = c(2,6,12,24,48,96),
+    "solar_location2" = c(2,6,12,24,48,96),
+    "solar_location3" = c(2,6,12,24,48,96),
+    "solar_location4" = c(2,6,12,24,48,96),
+    "solar_location5" = c(2,6,12,24,48,96),
+    "solar_location6" = c(2,6,12,24,48,96)
+  )
+) %>% 
+  mutate(period = hh_to_period(datetime),
+         yday = yday(datetime),
+         wday = wday(datetime)) %>% 
+  na.omit()
+```
+
+```{r}
+# pod_df %>% 
+#   mutate(date = date(datetime),
+#          yymm = strftime(datetime, format = "%y%m")) %>% 
+#   ggplot(aes(x = period,
+#              y = demand_mw,
+#              colour = yymm,
+#              group = yymm)) + 
+#   geom_smooth(se = F) +
+#   xlim(31, 43)
+```
+
+
+
+## Cross-validation
+
+```{r}
+cv <- cv_ts_folds(
+  pod_df$datetime,
+  start_date = max(pod_df$datetime) + minutes(30) - days(7*4),
+  horizon = 7,
+  iterations = 4
+  # TODO: Add a jump variable to move forward by n days at each iteration
+)
+
+# Place everything beow this in another loop that works through lambda_l1 regularization values and appends to a dataframe.
+lambda_l1 <- 0.5
+for (i in seq_along(cv)) {
+  cv[[i]]$test_pred <- pred_demand(
+    pod_df,
+    cv[[i]]$train,
+    cv[[i]]$test,
+    lambda_l1 = lambda_l1
+  )
+}
+
+# actuals <- map_dfc(
+#   set_names(1:length(cv),
+#             nm = paste0("demand_mw_", 1:length(cv))), 
+#   ~pod_df[cv[[.x]]$test,] %>% 
+#     filter(period %in% 32:42) %>% 
+#     pull(demand_mw)
+# )
+pred_df <- map_dfc(
+  set_names(1:length(cv),
+            nm = paste0("pred_demand_mw_", 1:length(cv))), 
+  ~cv[[.x]]$test_pred
+) %>% 
+  pivot_longer(cols = everything(),
+               names_to = c("variable", "iteration"),
+               names_sep = "_(?=[0-9]$)+")
+
+cv_dts <- map_dfc(
+  set_names(1:length(cv),
+            nm = paste0("datetime_", 1:length(cv))), 
+  ~pod_df[cv[[.x]]$test,] %>% 
+    filter(period %in% 32:42) %>%
+    pull(datetime)
+)
+pred_df$datetime <- c(cv_dts)
+
+pred_df <- bind_cols(dt_df, pred_df) %>% 
+  pivot_longer(cols = everything(),
+               names_to = c("variable", "iteration"),
+               names_sep = "_(?=[0-9]$)+") %>% 
+  mutate(lambda_l1 = lambda_l1) %>% 
+  pivot_wider(names_from = variable, values_from = value)
+```
+
+
+
+
+
