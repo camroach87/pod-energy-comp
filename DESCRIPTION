@@ -13,4 +13,10 @@ Suggests:
     testthat
 RoxygenNote: 7.1.1
 Imports: 
-    magrittr
+    magrittr,
+    dplyr (>= 1.0),
+    lubridate (>= 1.7),
+    purrr (>= 0.3),
+    readr (>= 1.4),
+    stringr (>= 1.4),
+    tidyselect (>= 1.1)
