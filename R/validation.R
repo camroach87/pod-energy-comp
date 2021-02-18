@@ -13,8 +13,8 @@
 #' @examples
 #' library(lubridate)
 #' dts <- ymd("2020-01-01") + minutes(30)*0:(48*14-1)
-#' cv_folds <- ts_cv_folds(dts, ymd("2020-01-07"), 2, 3)
-ts_cv_folds <- function(x, start_date, horizon, iterations) {
+#' cv_folds <- cv_ts_folds(dts, ymd("2020-01-07"), 2, 3)
+cv_ts_folds <- function(x, start_date, horizon, iterations) {
   if (any(sort(x) != x)) stop("Datetime values must be ordered.")
   
   list_cv <- list()
