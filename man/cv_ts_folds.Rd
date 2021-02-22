@@ -4,7 +4,7 @@
 \alias{cv_ts_folds}
 \title{Get cross validation folds for time series}
 \usage{
-cv_ts_folds(x, start_date, horizon, iterations)
+cv_ts_folds(x, start_date, horizon, iterations, jump = horizon)
 }
 \arguments{
 \item{x}{(datetime) Vector of dates to create indexes for. Must be ordered.}
@@ -14,6 +14,8 @@ cv_ts_folds(x, start_date, horizon, iterations)
 \item{horizon}{(int) Number of days making up each out-of-sample test set.}
 
 \item{iterations}{(int) Number of training and test sets to create.}
+
+\item{jump}{(int) Number of days to move forward each iteration. Defaults to the horizon length.}
 }
 \value{
 List with train and test elements for each iteration.
