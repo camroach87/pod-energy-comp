@@ -113,3 +113,78 @@ load_data <- function(path, locations = 1:6, inc_pv_cond = F,
   
   combine_df
 }
+
+
+#' Load PV data
+#'
+#' @param path (chr) Path to data.
+#'
+#' @return Data frame containing PV generation (MW) data and required features
+#'   for training PV generation model.
+#' @export
+#' 
+#' @importFrom dplyr select mutate slice
+#' @importFrom lubridate yday
+load_pv_data <- function(path) {
+  load_data(
+    path,
+    locations = 1:6,
+    lags = list(
+      "pv_power_mw" = 48*7,
+      "temp_location1" = 1:4,
+      "temp_location2" = 1:4,
+      "temp_location3" = 1:4,
+      "temp_location4" = 1:4,
+      "temp_location5" = 1:4,
+      "temp_location6" = 1:4,
+      "solar_location1" = 1:4,
+      "solar_location2" = 1:4,
+      "solar_location3" = 1:4,
+      "solar_location4" = 1:4,
+      "solar_location5" = 1:4,
+      "solar_location6" = 1:4
+    )
+  ) %>% 
+    select(-demand_mw) %>% 
+    mutate(period = hh_to_period(datetime),
+           yday = yday(datetime)) %>% 
+    slice(-c(1:(48*7)))  # removes first 7 days missing week-lagged PV data
+}
+
+#' Load demand data
+#'
+#' @param path (chr) Path to data.
+#'
+#' @return Data frame containing demand (MW) data and required features for
+#'   training demand model.
+#' @export
+#' 
+#' @importFrom dplyr select mutate filter slice
+#' @importFrom lubridate yday wday
+load_demand_data <- function(path) {
+  load_data(
+    path,
+    locations = 1:6,
+    lags = list(
+      "demand_mw" = 48*7,
+      "temp_location1" = c(2,6,12,24,48,96),
+      "temp_location2" = c(2,6,12,24,48,96),
+      "temp_location3" = c(2,6,12,24,48,96),
+      "temp_location4" = c(2,6,12,24,48,96),
+      "temp_location5" = c(2,6,12,24,48,96),
+      "temp_location6" = c(2,6,12,24,48,96),
+      "solar_location1" = c(2,6,12,24,48,96),
+      "solar_location2" = c(2,6,12,24,48,96),
+      "solar_location3" = c(2,6,12,24,48,96),
+      "solar_location4" = c(2,6,12,24,48,96),
+      "solar_location5" = c(2,6,12,24,48,96),
+      "solar_location6" = c(2,6,12,24,48,96)
+    )
+  ) %>% 
+    select(-pv_power_mw) %>% 
+    mutate(period = hh_to_period(datetime),
+           yday = yday(datetime),
+           wday = wday(datetime, week_start = 1)) %>%  # 1 = Monday
+    filter(period %in% 32:42) %>% 
+    slice(-c(1:(11*7)))  # removes first 7 days missing week-lagged demand data
+}
