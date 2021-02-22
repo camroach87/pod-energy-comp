@@ -11,229 +11,74 @@ knitr::opts_chunk$set(echo = TRUE)
 library(podEnergyComp)
 library(tidyverse)
 library(lubridate)
+
+fcst_start_date <- ymd("2018-10-16")
+# fcst_start_date <- ymd("2018-10-02")  # TODO: DELETE ME
+
+# load data
+demand.data <- load_demand_data("../inst/extdata/pod_ds_task1")
+demand.cv <- cv_ts_folds(demand.data$datetime, start_date = fcst_start_date,
+                         horizon = 7, iterations = 1)
+
+pv.data <- load_pv_data("../inst/extdata/pod_ds_task1")
+pv.cv <- cv_ts_folds(pv.data$datetime, start_date = fcst_start_date,
+                     horizon = 7, iterations = 1)
+
+# fit models and predict
+demand.forecast <- pred_demand(demand.data, demand.cv[[1]]$train, 
+                               demand.cv[[1]]$test, lambda_l1 = 1.0)
+pv.forecast <- pred_pv(pv.data, pv.cv[[1]]$train, pv.cv[[1]]$test, 
+                       lambda_l1 = 2.1)
+
+demand.pred_df <- tibble(
+  datetime = getElement(demand.data[demand.cv[[1]]$test,], "datetime"),
+  demand_mw = demand.forecast
+)
+pv.pred_df <- tibble(
+  datetime = getElement(pv.data[pv.cv[[1]]$test,], "datetime"),
+  pv_power_mw = pv.forecast
+)
+fcst_df <- full_join(pv.pred_df, demand.pred_df, by = "datetime") %>% 
+  mutate(period = 2*hour(datetime) + minute(datetime)/30 + 1)
+
+# schedule battery
+b_sched <- schedule_battery(fcst_df)
+bat_df <- format_charge_data(b_sched$B)
+
+# save results
+write_csv(bat_df,
+          file = "../inst/extdata/pod_ds_task1/Cameron_set1.csv")
 ```
 
-## Load data
+
+## Checks
 
 ```{r}
-demand.data <- load_data(
-  "../inst/extdata/pod_ds_task1",
-  locations = 1:6,
-  lags = list(
-    "demand_mw" = 48*7,
-    "temp_location1" = c(2,6,12,24,48,96),
-    "temp_location2" = c(2,6,12,24,48,96),
-    "temp_location3" = c(2,6,12,24,48,96),
-    "temp_location4" = c(2,6,12,24,48,96),
-    "temp_location5" = c(2,6,12,24,48,96),
-    "temp_location6" = c(2,6,12,24,48,96),
-    "solar_location1" = c(2,6,12,24,48,96),
-    "solar_location2" = c(2,6,12,24,48,96),
-    "solar_location3" = c(2,6,12,24,48,96),
-    "solar_location4" = c(2,6,12,24,48,96),
-    "solar_location5" = c(2,6,12,24,48,96),
-    "solar_location6" = c(2,6,12,24,48,96)
-  )
-) %>% 
-  select(-pv_power_mw) %>% 
-  mutate(period = hh_to_period(datetime),
-         yday = yday(datetime),
-         wday = wday(datetime, week_start = 1)) %>%  # week start on monday
-  filter(period %in% d_idx) %>% 
-  na.omit()
-
-
-
-
-
-
-fcst_dts <- ymd("2018-07-23") + days(0:6)
-  
-fcst_df <- load_data("../inst/extdata/pod_ds_task1")
-  filter(date(datetime) %in% fcst_dts) %>% 
-  mutate(wday = wday(datetime, label=T))
-```
-
-## Fit models and forecast
-
-```{r}
-# PV
-pv.train <- pv_df %>% 
-  inner_join(weather_df, by="datetime") %>% 
-  select(pv_power_mw, matches("location[12]{1}")) %>% 
-  na.omit()
-pv.gbm <- gbm(data = pv.train,
-              formula = pv_power_mw ~ .,
-              n.trees = 200,
-              distribution = "gaussian",
-              shrinkage = 0.1,
-              interaction.depth = 5,
-              n.minobsinnode = 10,
-              bag.fraction = 0.5)
-fcst_df$pv_power_mw <- predict(pv.gbm, 
-                               newdata=fcst_df, 
-                               n.trees=pv.gbm$n.trees)
-# FIXME: implement better way to ensure pv > 0
-fcst_df$pv_power_mw <- if_else(fcst_df$pv_power_mw < 0, 0, fcst_df$pv_power_mw)
-
-# Demand
-# TODO: interpolate weather data for half-hourly
-# TODO: Add in period of day
-demand.train <- demand_df %>% 
-  inner_join(weather_df, by = "datetime") %>% 
-  mutate(period = 2*hour(datetime) + minute(datetime)/30 + 1) %>% 
-  filter(period %in% 32:42) %>%  # only predicting demand for periods of interest
-  select(demand_mw, wday, matches("location[12]{1}")) %>% 
-  na.omit()
-demand.gbm <- gbm(data = demand.train,
-              formula = demand_mw ~ .,
-              n.trees = 200,
-              distribution = "gaussian",
-              shrinkage = 0.1,
-              interaction.depth = 5,
-              n.minobsinnode = 10,
-              bag.fraction = 0.5)
-fcst_df$demand_mw <- predict(demand.gbm, 
-                             newdata=fcst_df, 
-                             n.trees=pv.gbm$n.trees)
-fcst_df <- fcst_df %>% 
-  mutate(period = 2*hour(datetime) + minute(datetime)/30 + 1) %>% 
-  mutate(demand_mw = if_else(!(period %in% 32:42), NA_real_, demand_mw))
-
-# Check
 fcst_df %>% 
   select(datetime, demand_mw, pv_power_mw) %>% 
   pivot_longer(-datetime) %>% 
   ggplot(aes(x = datetime, y = value, colour = name)) +
   geom_line()
-```
 
-## Schedule battery
-
-```{r}
-# TODO: add test to make sure columns are correctly ordered 1:48
-P <- fcst_df %>% 
-  mutate(date = date(datetime)) %>% 
-  select(date, period, pv_power_mw) %>% 
-  pivot_wider(id_cols = date, 
-              names_from = period, 
-              values_from = pv_power_mw) %>% 
-  column_to_rownames("date") %>% 
-  as.matrix()
-L <- fcst_df %>% 
-  mutate(date = date(datetime)) %>% 
-  select(date, period, demand_mw) %>% 
-  pivot_wider(id_cols = date, 
-              names_from = period, 
-              values_from = demand_mw) %>% 
-  column_to_rownames("date") %>% 
-  as.matrix()
-B <- C <- matrix(0, nrow = 7, ncol = 48, dimnames = dimnames(P))
-
-# Charge battery ====================================================
-# Loop through each day and periods < 41 to charge battery. Takes a proportion
-# of solar PV produced at each period step so that all charges add up to battery
-# capacity.
-# TODO: Instead of taking the same proportion at each step, proportion could be
-# based on % variance of residuals. Periods of day with more reliable
-# predictions can take in more solar as there is less risk. Same idea could
-# probably apply to reducing the peak - focus on more confident high peak times,
-# perhaps?
-c_idx <- 2:31  # charging period indices
-for (iD in as.character(fcst_dts)) {
-  # Total solar expected
-  P_tot <- sum(P[iD,c_idx])
-  # NB: this forces the battery to be fully charged and will take in grid demand
-  # if not enough solar. However, score is improved the more the battery is
-  # charged so that is ok.
-  sc_fctr <- 12/P_tot
-  
-  for (iP in c_idx) {
-    if (P[iD,iP] > 0) {
-      B[iD,iP] <- min(sc_fctr*P[iD, iP], 2.5)
-      C[iD,iP+1] <- C[iD,iP] + 0.5*B[iD,iP]  # 0.5 converts MW to MWh
-      
-      # check constraints
-      if (C[iD,iP+1] > 6) {
-        # FIXME: some rounding errors introduced when correcting for C > 6 MWh
-        B[iD,iP] <- 2*(6 - C[iD,iP])
-        C[iD,iP+1] <- 6
-      } 
-    }
-  }
-}
-
+# TODO: convert these to tests that a user can run with test_schedule command
 # FIXME: some rounding errors introduced when correcting for C > 6 MWh
-matplot(t(B), type = "l")
-matplot(t(C), type = "l")
-table(C[,2:32] == 0.5*t(apply(B, 1, cumsum))[,1:31])
-table(abs(C[,2:32] - 0.5*t(apply(B, 1, cumsum))[,1:31]) < 1e-12)
-min(B, na.rm=T) >= 0
-max(B, na.rm=T) <= 2.5
-max(apply(t(B[,1:31]), 2, cumsum)) <= 12
-max(apply(t(B[,1:31]), 2, cumsum)) - 12
+matplot(t(b_sched$B), type = "l")
+matplot(t(b_sched$C), type = "l")
+table(b_sched$C[,2:32] == 0.5*t(apply(b_sched$B, 1, cumsum))[,1:31])
+table(abs(b_sched$C[,2:32] - 0.5*t(apply(b_sched$B, 1, cumsum))[,1:31]) < 1e-12)
+min(b_sched$B, na.rm=T) >= -2.5
+max(b_sched$B, na.rm=T) <= 2.5
+max(apply(t(b_sched$B[,1:31]), 2, cumsum)) <= 12
+max(apply(t(b_sched$B[,1:31]), 2, cumsum)) - 12
+max(b_sched$C) <= 6
+min(b_sched$C) == 0
+all(b_sched$B[,32:42] <= 0)
+all(b_sched$B[,1:31] >= 0)
 
-
-# Discharging battery to reduce peak demand =========================
-# TODO: Add test to make sure peak profile is concave. Need to figure out what
-# to do if there are sudden dips in probile - not sure this method will work
-# properly. See notes in notebook. NB: I think this will only be an issue if the
-# new peak is higher than the min demand of old profile. If new peak is below
-# old profile all battery discharge values will be negative over d_idx as
-# required. So, can probably just add a test to see if the new peak is above any
-# of the old profile demand values.
-# TODO: Also add tests to make sure constraints aren't violated should
-# non-convex profile be predicted.
-d_idx <- 32:42  # discharge period indices
-for (iD in as.character(fcst_dts)) {
-  # Subtracts 6 MWh from peak giving flat profile over d_idx periods
-  new_peak_mw <- (sum(L[iD,d_idx]) - 12)/length(d_idx)
-  for (iP in d_idx) {
-    if (C[iD,iP] > 0) {
-      dschrg_mw <- L[iD,iP] - new_peak_mw
-      B[iD,iP] <- -1 * min(2.5, dschrg_mw)
-      C[iD,iP+1] <- C[iD,iP] + 0.5*B[iD,iP]
-    } else if (C[iD,iP] == 0) {
-      # battery completely discharged so move to next day
-      B[iD,iP:max(d_idx)] <- C[iD,(iP+1):(max(d_idx)+1)] <- 0
-      break
-    }
-  }
-}
-
-B[,43:48] <- 0
-C[,44:48] <- C[,43]
-
-# checks
-matplot(t(B), type = "l")
-matplot(t(C), type = "l")
-table(C[,2:32] == 0.5*t(apply(B, 1, cumsum))[,1:31])
-table(abs(C[,2:32] - 0.5*t(apply(B, 1, cumsum))[,1:31]) < 1e-12)
-max(B) <= 2.5
-min(B) >= -2.5
-max(C) <= 6
-min(C) == 0
-all(B[,d_idx] <= 0)
-all(B[,c_idx] >= 0)
-```
-
-
-
-# Reformat
-
-```{r}
-bat_df <- B %>% 
-  as_tibble(rownames = "date") %>% 
-  pivot_longer(cols = -date,
-               names_to = "period", 
-               values_to = "charge_MW") %>% 
-  mutate(period = as.numeric(period),
-         datetime = as_datetime(date) + minutes(30*(period-1))) %>% 
-  arrange(datetime) %>% 
-  mutate(`_id` = row_number()) %>% 
-  select(`_id`, datetime, charge_MW)
-
-bla <- bat_df %>% group_by(date = date(datetime)) %>% mutate(cumsum_charge_MW = cumsum(charge_MW))
+# check battery data frame
+bla <- bat_df %>% 
+  group_by(date = date(datetime)) %>% 
+  mutate(cumsum_charge_MW = cumsum(charge_MW))
 max(bla$cumsum_charge_MW) - 12 == 0
 
 ggplot(bat_df, aes(x = datetime, y = charge_MW)) + 
@@ -242,7 +87,7 @@ ggplot(bat_df, aes(x = datetime, y = charge_MW)) +
 bat_df %>% 
   inner_join(fcst_df, by = "datetime") %>% 
   mutate(demand_red_mw = demand_mw,
-         demand_red_mw = if_else(period %in% d_idx,
+         demand_red_mw = if_else(period %in% 32:42,
                                  demand_mw + charge_MW,
                                  demand_mw)) %>% 
   select(datetime, demand_mw, demand_red_mw) %>% 
@@ -251,11 +96,3 @@ bat_df %>%
   geom_line() +
   ylim(0, NA)
 ```
-
-## Output results
-
-```{r}
-write_csv(bat_df,
-          file = "../inst/extdata/pod_ds_task0/Cameron_set0.csv")
-```
-
