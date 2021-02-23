@@ -19,7 +19,7 @@
 #' @importFrom dplyr select rename mutate bind_cols left_join full_join
 #' @importFrom tidyselect peek_vars
 #' @importFrom purrr map set_names
-#' @importFrom lubridate ymd
+#' @importFrom lubridate ymd mdy
 load_data <- function(path, locations = 1:6, inc_pv_cond = F,
                       lags = NULL) {
   # file names have different integers at end depending on batch release
@@ -110,6 +110,24 @@ load_data <- function(path, locations = 1:6, inc_pv_cond = F,
     bind_cols(lag_list) %>%                           # add lags
     filter(datetime >= min(demand_df$datetime)) %>%   # remove pre-demand data
     select(datetime, sort(peek_vars()))
+  
+  # Add public holidays
+  pub_hol_df <- read_csv(
+    file.path(path, "..", "England_Wales_public_holidays.csv"), 
+    comment = "#",
+    col_types = cols_only(
+      Date = col_character()
+    )
+  ) %>% 
+    rename(date = Date) %>% 
+    mutate(date = mdy(date),
+           public_holiday = 1)
+  
+  combine_df <- combine_df %>% 
+    mutate(date = date(datetime)) %>% 
+    left_join(pub_hol_df, by = "date") %>% 
+    mutate(public_holiday = if_else(is.na(public_holiday), 0, public_holiday)) %>% 
+    select(-date)
   
   combine_df
 }
