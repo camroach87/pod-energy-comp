@@ -15,8 +15,8 @@
 #' @return Data frame.
 #' @export
 #'
-#' @importFrom readr read_csv cols col_datetime col_double
-#' @importFrom dplyr select rename mutate bind_cols left_join full_join
+#' @importFrom readr read_csv cols cols_only col_datetime col_double col_character
+#' @importFrom dplyr select rename mutate bind_cols left_join full_join if_else
 #' @importFrom tidyselect peek_vars
 #' @importFrom purrr map set_names
 #' @importFrom lubridate ymd mdy
