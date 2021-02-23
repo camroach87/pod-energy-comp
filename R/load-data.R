@@ -124,7 +124,7 @@ load_data <- function(path, locations = 1:6, inc_pv_cond = F,
 #' @export
 #' 
 #' @importFrom dplyr select mutate slice
-#' @importFrom lubridate yday
+#' @importFrom lubridate yday month
 load_pv_data <- function(path) {
   load_data(
     path,
@@ -147,6 +147,7 @@ load_pv_data <- function(path) {
   ) %>% 
     select(-demand_mw) %>% 
     mutate(period = hh_to_period(datetime),
+           month = month(datetime),
            yday = yday(datetime)) %>% 
     slice(-c(1:(48*7)))  # removes first 7 days missing week-lagged PV data
 }
@@ -160,7 +161,7 @@ load_pv_data <- function(path) {
 #' @export
 #' 
 #' @importFrom dplyr select mutate filter slice
-#' @importFrom lubridate yday wday
+#' @importFrom lubridate yday wday month
 load_demand_data <- function(path) {
   load_data(
     path,
@@ -183,6 +184,7 @@ load_demand_data <- function(path) {
   ) %>% 
     select(-pv_power_mw) %>% 
     mutate(period = hh_to_period(datetime),
+           month = month(datetime),
            yday = yday(datetime),
            wday = wday(datetime, week_start = 1)) %>%  # 1 = Monday
     filter(period %in% 32:42) %>% 
