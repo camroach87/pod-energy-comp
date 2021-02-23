@@ -13,23 +13,29 @@ library(tidyverse)
 library(lubridate)
 
 fcst_start_date <- ymd("2018-10-16")
-# fcst_start_date <- ymd("2018-10-02")  # TODO: DELETE ME
 
-# load data
+# predict PV and demand
 demand.data <- load_demand_data("../inst/extdata/pod_ds_task1")
-demand.cv <- cv_ts_folds(demand.data$datetime, start_date = fcst_start_date,
-                         horizon = 7, iterations = 1)
+demand.cv <- cv_ts_folds(demand.data$datetime,
+                         start_date = fcst_start_date,
+                         horizon = 7, 
+                         iterations = 1)
+demand.forecast <- pred_demand(demand.data,
+                               demand.cv[[1]]$train, 
+                               demand.cv[[1]]$test,
+                               lambda_l1 = 1.0)
 
 pv.data <- load_pv_data("../inst/extdata/pod_ds_task1")
-pv.cv <- cv_ts_folds(pv.data$datetime, start_date = fcst_start_date,
-                     horizon = 7, iterations = 1)
+pv.cv <- cv_ts_folds(pv.data$datetime, 
+                     start_date = fcst_start_date,
+                     horizon = 7, 
+                     iterations = 1)
+pv.forecast <- pred_pv(pv.data,
+                       pv.cv[[1]]$train,
+                       pv.cv[[1]]$test, 
+                       lambda_l1 = 1.5)
 
-# fit models and predict
-demand.forecast <- pred_demand(demand.data, demand.cv[[1]]$train, 
-                               demand.cv[[1]]$test, lambda_l1 = 1.0)
-pv.forecast <- pred_pv(pv.data, pv.cv[[1]]$train, pv.cv[[1]]$test, 
-                       lambda_l1 = 2.1)
-
+# Tidy predictions
 demand.pred_df <- tibble(
   datetime = getElement(demand.data[demand.cv[[1]]$test,], "datetime"),
   demand_mw = demand.forecast
@@ -58,6 +64,13 @@ fcst_df %>%
   select(datetime, demand_mw, pv_power_mw) %>% 
   pivot_longer(-datetime) %>% 
   ggplot(aes(x = datetime, y = value, colour = name)) +
+  geom_line()
+
+fcst_df %>% 
+  select(datetime, pred = pv_power_mw) %>% 
+  inner_join(select(pv.data, datetime, pv_power_mw)) %>% 
+  pivot_longer(-datetime) %>% 
+  ggplot(aes(x = datetime, y = value, colour = name)) + 
   geom_line()
 
 # TODO: convert these to tests that a user can run with test_schedule command
