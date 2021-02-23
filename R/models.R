@@ -69,14 +69,12 @@ predict_lgbm <- function(data, train_idx, test_idx, response_idx, ...) {
       label = data.train_label
     ),
     num_leaves = 31L,
-    # learning_rate = 1e-2,
-    # nrounds = 1e3L,
-    learning_rate = 0.1,
-    nrounds = 100L,
+    learning_rate = 0.03,
+    nrounds = 250,
     obj = "regression_l1",
     metric = "regression_l1",
     verbose = 0,
-    force_row_wise = TRUE,
+    force_col_wise = TRUE,
     ...
   )
   
