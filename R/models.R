@@ -39,7 +39,7 @@ pred_pv <- function(data,
                     ...) {
   response_idx <- which(colnames(data)=="pv_power_mw")
   pv_pred <- predict_lgbm(data, train_idx, test_idx, response_idx, ...)
-  ifelse(pv_pred < 0, 0, pv_pred)
+  ifelse(pv_pred < 1e-2, 0, pv_pred)  # TODO: make 1e-2 a threshold argument 1e-2 MW is 100 W, which I think is reasonable to ignore
 }
 
 

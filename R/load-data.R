@@ -205,7 +205,7 @@ load_demand_data <- function(path) {
            month = month(datetime),
            yday = yday(datetime),
            wday = wday(datetime, week_start = 1)) %>%  # 1 = Monday
-    filter(period %in% 32:42,
-           date(datetime) != ymd("2018-05-08")) %>%  # outlier with 0 MW demand all day
-    slice(-c(1:(11*7)))  # removes first 7 days missing week-lagged demand data
+    slice(-c(1:(48*7))) %>%  # removes first 7 days missing week-lagged demand data
+    filter(period %in% 32:42,  # train with charging periods only
+           date(datetime) != ymd("2018-05-08"))  # outlier with 0 MW demand all day
 }

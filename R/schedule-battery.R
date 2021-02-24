@@ -21,25 +21,44 @@
 #' @return List of matrices showing the battery charges/discharges, cumulative
 #'   charge, loads and PV generation.
 #' @export
+#' 
+#' @importFrom tibble column_to_rownames
+#' @importFrom lubridate date
+#' @importFrom dplyr mutate select 
+#' @importFrom tidyr pivot_wider
 schedule_battery <- function(data) {
+  fill_missing_periods <- function(x) {
+    missing_periods <- c(1:48)[!(1:48 %in% colnames(x))]
+    missing_periods <- as.character(missing_periods)
+    x_na <- matrix(NA, nrow = nrow(x), ncol = length(missing_periods),
+           dimnames = list(rownames(x), missing_periods))
+    x <- cbind(x, x_na)
+    x <- x[,as.character(1:48)]
+    x
+  }
+  
   date_list <- unique(date(data$datetime))
-  P <- data %>% 
-    mutate(date = date(datetime)) %>% 
+  data <- data %>% 
+    mutate(date = date(datetime))
+  P <- data %>%
     select(date, period, pv_power_mw) %>% 
     pivot_wider(id_cols = date, 
                 names_from = period, 
                 values_from = pv_power_mw) %>% 
     column_to_rownames("date") %>% 
-    as.matrix()
+    as.matrix() %>% 
+    fill_missing_periods()
+  
   L <- data %>% 
-    mutate(date = date(datetime)) %>% 
     select(date, period, demand_mw) %>% 
     pivot_wider(id_cols = date, 
                 names_from = period, 
                 values_from = demand_mw) %>% 
     column_to_rownames("date") %>% 
-    as.matrix()
+    as.matrix() %>% 
+    fill_missing_periods()
   B <- C <- matrix(0, nrow = 7, ncol = 48, dimnames = dimnames(P))
+  # FIXME: hard coded schedule index
   c_idx <- 2:31  # charging period indices
   for (iD in as.character(date_list)) {
     # Total solar expected
@@ -56,10 +75,11 @@ schedule_battery <- function(data) {
         
         # check constraints
         if (C[iD,iP+1] > 6) {
-          # FIXME: some rounding errors introduced when correcting for C > 6 MWh
           B[iD,iP] <- 2*(6 - C[iD,iP])
           C[iD,iP+1] <- 6
         } 
+      } else {
+        C[iD,iP+1] <- C[iD,iP]
       }
     }
   }
@@ -74,6 +94,7 @@ schedule_battery <- function(data) {
   # above any of the old profile demand values.
   # TODO: Also add tests to make sure constraints aren't violated should
   # non-convex profile be predicted.
+  # FIXME: hard coded schedule index
   d_idx <- 32:42  # discharge period indices
   for (iD in as.character(date_list)) {
     # Subtracts 6 MWh from peak giving flat profile over d_idx periods
@@ -94,6 +115,9 @@ schedule_battery <- function(data) {
   # fill remaining values
   B[,43:48] <- 0
   C[,44:48] <- C[,43]
+  
+  # round due to numeric precision issues
+  C <- round(C,8)
 
   list("B" = B,
        "C" = C,
