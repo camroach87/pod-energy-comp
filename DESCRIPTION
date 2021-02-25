@@ -19,4 +19,7 @@ Imports:
     purrr (>= 0.3),
     readr (>= 1.4),
     stringr (>= 1.4),
-    tidyselect (>= 1.1)
+    tidyselect (>= 1.1),
+    tidyr (>= 1.1),
+    tibble (>= 3.0),
+    lightgbm (>= 3.1)
