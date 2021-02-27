@@ -10,7 +10,7 @@ score_fcst_file(file)
 \item{file}{(chr) File containing forecasts in competition format.}
 }
 \value{
-Named vector with scores for each date.
+Data frame containing peak reduction, PV proportion and scores.
 }
 \description{
 Scores forecasts.

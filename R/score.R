@@ -11,7 +11,7 @@
 #' @importFrom lubridate hour minute date
 #' @importFrom stringr str_extract
 #'
-#' @return Named vector with scores for each date.
+#' @return Data frame containing peak reduction, PV proportion and scores.
 #' @export
 score_fcst_file <- function(file) {
   charge_df <- read_csv(
@@ -70,5 +70,5 @@ score_fcst_file <- function(file) {
     mutate(r = 100*(peak_old_mw - peak_new_mw)/peak_old_mw,
            s = r*(3*p_d1 + 1*p_d2))
   
-  set_names(score_df$s, nm = score_df$date)
+  score_df
 }
