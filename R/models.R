@@ -1,10 +1,3 @@
-pred_demand_bm <- function(data,
-                           train_idx,
-                           test_idx,
-                           ...) {
-  # TODO: use last week's actuals as forecast. Just subtract 7 days from test_idx dates to find demand.
-}
-
 #' Predict demand
 #'
 #' @param data (data frame) Data frame containing predictors and response variable `demand_mw`.
