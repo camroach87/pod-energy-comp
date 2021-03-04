@@ -16,6 +16,38 @@ pred_demand <- function(data,
   predict_lgbm(data, train_idx, test_idx, response_idx, ...)
 }
 
+#' Predict demand with models for each period
+#'
+#' @param data (data frame) Data frame containing predictors and response variable `demand_mw`. Must also contain `period` column.
+#' @param train_idx (integer) Vector of integers specifying which rows to use for training model
+#' @param test_idx (integer) Vector of integers specifying which rows to use for testing model
+#' @param ... Additional arguments passed to `lgb.fit`.
+#'
+#' @return
+#' @export
+pred_demand_period <- function(data,
+                               train_idx,
+                               test_idx,
+                               ...) {
+  response_idx <- which(colnames(data)=="demand_mw")
+  period_list <- unique(data$period)
+  preds <- rep(NA, length(test_idx))
+  for (i in period_list) {
+    period_idx <- which(data$period == i)
+    period_train_idx <- intersect(period_idx, train_idx)
+    period_test_idx <- intersect(period_idx, test_idx)
+    pred_idx <- period_test_idx - min(test_idx) + 1
+    preds[pred_idx] <- predict_lgbm(
+      data[,-which(colnames(data)=="period")],  # remove as constant
+      period_train_idx, 
+      period_test_idx, 
+      response_idx, 
+      ...
+    )
+  }
+  preds
+}
+
 
 #' Predict PV power
 #'

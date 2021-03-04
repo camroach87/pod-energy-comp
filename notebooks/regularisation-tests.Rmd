@@ -20,6 +20,7 @@ pv.data <- load_pv_data("../inst/extdata/pod_ds_task2") %>%
   filter(!is.na(pv_power_mw))
 
 cv_iter <- 5
+# FIXME: calculate different start_date for PV OR change this to date instead of datetime. May need to work on cv_ts_folds()
 start_date <- max(demand.data$datetime) + minutes(30) - days(7*cv_iter)
 # start_date <- ymd("2018-10-15") - days(7*cv_iter)
 ```
@@ -45,11 +46,12 @@ demand.cv_df <- cross_df(
 
 for (i in 1:nrow(demand.cv_df)) {
   print(paste0(i, "/", nrow(demand.cv_df), " : ", Sys.time()))
-  pred <- pred_demand(
+  pred <- pred_demand_period(
     select(demand.data, -datetime),
     demand.cv_df$cv[[i]]$train,
     demand.cv_df$cv[[i]]$test,
-    nrounds = 500,
+    nrounds = 100,
+    min_data_in_leaf = 2,
     num_leaves = demand.cv_df$nl[i],
     learning_rate = demand.cv_df$lr[i],
     obj = "regression",
@@ -91,7 +93,10 @@ demand.results %>%
          nl = factor(nl)) %>% 
   ggplot(aes(x = lr, y = nl, fill = rmse)) +
   geom_tile() +
-  scale_fill_viridis_c(direction = -1)
+  geom_text(aes(label = round(rmse, 4))) +
+  scale_fill_viridis_c(direction = -1) +
+  labs(title = "RMSE values",
+       subtitle = paste0("Start date: ", start_date, ", iter: ", cv_iter))
 
 best_param <- demand.results %>% 
   filter(rmse == min(rmse)) %>% 

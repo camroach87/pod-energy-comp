@@ -12,7 +12,7 @@ library(podEnergyComp)
 library(tidyverse)
 library(lubridate)
 
-fcst_start_date <- ymd("2018-10-16")
+fcst_start_date <- ymd("2019-03-03")
 
 # predict PV and demand
 demand.data <- load_demand_data("../inst/extdata/pod_ds_task2")
@@ -20,11 +20,22 @@ demand.cv <- cv_ts_folds(demand.data$datetime,
                          start_date = fcst_start_date,
                          horizon = 7, 
                          iterations = 1)
+# demand.forecast <- pred_demand_period(
+#   select(demand.data, -datetime),
+#   demand.cv[[1]]$train,
+#   demand.cv[[1]]$test,
+#   nrounds = 100L,
+#   min_data_in_leaf = 2L,
+#   num_leaves = 16L,
+#   learning_rate = 0.1,
+#   obj = "regression",
+#   metric = "regression"
+# )
 demand.forecast <- pred_demand(
   select(demand.data, -datetime),
-  demand.cv[[1]]$train, 
+  demand.cv[[1]]$train,
   demand.cv[[1]]$test,
-  nrounds = 500,
+  nrounds = 500L,
   num_leaves = 8L,
   learning_rate = 0.1,
   obj = "regression",
@@ -40,7 +51,7 @@ pv.forecast <- pred_pv(
   select(pv.data, -datetime),
   pv.cv[[1]]$train,
   pv.cv[[1]]$test,
-  nrounds = 250,
+  nrounds = 250L,
   lambda_l1 = 1.5,
   num_leaves = 31L,
   learning_rate = 0.03,
@@ -67,7 +78,7 @@ bat_df <- format_charge_data(b_sched$B)
 
 # save results
 write_csv(bat_df,
-          file = "../inst/extdata/pod_ds_task2/Cameron_set2_new_reg.csv")
+          file = "../inst/extdata/pod_ds_task2/Cameron_set2_orig.csv")
 ```
 
 
