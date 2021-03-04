@@ -29,15 +29,7 @@ score_fcst_file <- function(file) {
       date = date(datetime)
     )
   
-  # Load actual data
-  # FIXME: I'm going to have to figure out how to store data better. If this
-  # package was installed, the inst/extdata directory wouldn't be available
-  # anymore. So this is really quite a bizarre way to load the data.
-  files <- list.files(file.path("inst", "extdata"))
-  latest_task <- max(str_extract(files, "[0-6]{1}$"), na.rm = T)
-  latest_data_path <- file.path("inst", "extdata", 
-                                paste0("pod_ds_task", latest_task))
-  actual_df <- load_data(latest_data_path) %>% 
+  actual_df <- pod %>% 
     select(datetime, demand_mw, pv_power_mw)
   
   charge_df <- charge_df %>% 

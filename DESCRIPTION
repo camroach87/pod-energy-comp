@@ -23,3 +23,5 @@ Imports:
     tidyr (>= 1.1),
     tibble (>= 3.0),
     lightgbm (>= 3.1)
+Depends: 
+    R (>= 2.10)

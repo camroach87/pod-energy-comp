@@ -4,10 +4,7 @@
 \alias{load_pv_data}
 \title{Load PV data}
 \usage{
-load_pv_data(path)
-}
-\arguments{
-\item{path}{(chr) Path to data.}
+load_pv_data()
 }
 \value{
 Data frame containing PV generation (MW) data and required features

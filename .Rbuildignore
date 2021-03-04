@@ -2,3 +2,4 @@
 ^\.Rproj\.user$
 ^notebooks
 \.github
+^data-raw$

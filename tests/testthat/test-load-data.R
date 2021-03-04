@@ -1,5 +1,4 @@
-setwd("../..")
-demand.data <- load_demand_data("inst/extdata/pod_ds_task1")
+demand.data <- load_demand_data()
 
 test_that("public holidays load", {
   # Test holidays

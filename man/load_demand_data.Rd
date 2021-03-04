@@ -4,10 +4,7 @@
 \alias{load_demand_data}
 \title{Load demand data}
 \usage{
-load_demand_data(path)
-}
-\arguments{
-\item{path}{(chr) Path to data.}
+load_demand_data()
 }
 \value{
 Data frame containing demand (MW) data and required features for

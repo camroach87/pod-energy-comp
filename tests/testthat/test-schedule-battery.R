@@ -1,11 +1,9 @@
-setwd("../..")
-
 library(podEnergyComp)
 library(tidyverse)
 library(lubridate)
 
 fcst_start_date <- ymd("2019-03-10")
-demand.data <- load_demand_data("inst/extdata/pod_ds_task2")
+demand.data <- load_demand_data()
 demand.cv <- cv_ts_folds(demand.data$datetime,
                          start_date = fcst_start_date,
                          horizon = 7, 
@@ -14,7 +12,7 @@ demand.forecast <- pred_demand(demand.data[,-1],
                                demand.cv[[1]]$train, 
                                demand.cv[[1]]$test,
                                objective = "regression")
-pv.data <- load_pv_data("inst/extdata/pod_ds_task2")
+pv.data <- load_pv_data()
 pv.cv <- cv_ts_folds(pv.data$datetime, 
                      start_date = fcst_start_date,
                      horizon = 7, 

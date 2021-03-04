@@ -1,6 +1,4 @@
 test_that("scores correct", {
-  setwd("../..")
-  sc <- score_fcst_file("inst/extdata/pod_ds_task0/Cameron_set0.csv")
   expect_s3_class(sc, c("tbl_df", "tbl", "data.frame"))
   expect_equivalent(
     round(sc$s, 3),
