@@ -14,9 +14,9 @@ library(lubridate)
 library(lightgbm)
 library(podEnergyComp)
 
-demand.data <- load_demand_data("../inst/extdata/pod_ds_task2") %>% 
+demand.data <- load_demand_data() %>% 
   filter(!is.na(demand_mw))
-pv.data <- load_pv_data("../inst/extdata/pod_ds_task2") %>% 
+pv.data <- load_pv_data() %>% 
   filter(!is.na(pv_power_mw))
 
 cv_iter <- 5
