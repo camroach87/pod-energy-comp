@@ -23,7 +23,12 @@ demand.cv <- cv_ts_folds(demand.data$datetime,
 demand.forecast <- pred_demand(demand.data,
                                demand.cv[[1]]$train, 
                                demand.cv[[1]]$test,
-                               lambda_l1 = 1.0)
+                               nrounds = 250,
+                               lambda_l1 = 1.0,
+                               num_leaves = 31L,
+                               learning_rate = 0.03,
+                               obj = "regression_l1",
+                               metric = "regression_l1")
 
 pv.data <- load_pv_data("../inst/extdata/pod_ds_task1")
 pv.cv <- cv_ts_folds(pv.data$datetime, 
@@ -32,8 +37,13 @@ pv.cv <- cv_ts_folds(pv.data$datetime,
                      iterations = 1)
 pv.forecast <- pred_pv(pv.data,
                        pv.cv[[1]]$train,
-                       pv.cv[[1]]$test, 
-                       lambda_l1 = 1.5)
+                       pv.cv[[1]]$test,
+                       nrounds = 250,
+                       lambda_l1 = 1.5,
+                       num_leaves = 31L,
+                       learning_rate = 0.03,
+                       obj = "regression_l1",
+                       metric = "regression_l1")
 
 # Tidy predictions
 demand.pred_df <- tibble(

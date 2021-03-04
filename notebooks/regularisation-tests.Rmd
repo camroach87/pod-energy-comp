@@ -1,0 +1,300 @@
+---
+title: "Regularisation tests"
+author: "Cameron Roach"
+date: "03/03/2021"
+output: html_document
+---
+
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+library(tidyverse)
+library(lubridate)
+library(lightgbm)
+library(podEnergyComp)
+
+demand.data <- load_demand_data("../inst/extdata/pod_ds_task2") %>% 
+  filter(!is.na(demand_mw))
+pv.data <- load_pv_data("../inst/extdata/pod_ds_task2") %>% 
+  filter(!is.na(pv_power_mw))
+
+cv_iter <- 5
+start_date <- max(demand.data$datetime) + minutes(30) - days(7*cv_iter)
+# start_date <- ymd("2018-10-15") - days(7*cv_iter)
+```
+
+# Demand
+
+## Number of leaves and learning rate
+
+```{r}
+demand.cv_df <- cross_df(
+  list(
+    "lr" = c(0.05, 0.1, 0.2, 0.3),
+    "nl" = c(4, 8, 16, 24, 32),
+    "cv" = cv_ts_folds(
+      demand.data$datetime,
+      start_date = start_date,
+      horizon = 7,
+      iterations = cv_iter
+    ),
+    "pred" = NA
+  )
+)
+
+for (i in 1:nrow(demand.cv_df)) {
+  print(paste0(i, "/", nrow(demand.cv_df), " : ", Sys.time()))
+  pred <- pred_demand(
+    select(demand.data, -datetime),
+    demand.cv_df$cv[[i]]$train,
+    demand.cv_df$cv[[i]]$test,
+    nrounds = 500,
+    num_leaves = demand.cv_df$nl[i],
+    learning_rate = demand.cv_df$lr[i],
+    obj = "regression",
+    metric = "regression",
+  )
+  
+  demand.cv_df$pred[i] <- 
+    list(
+      tibble(
+        datetime = getElement(demand.data[demand.cv_df$cv[[i]]$test,],
+                              "datetime"),
+        demand_mw = getElement(demand.data[demand.cv_df$cv[[i]]$test,],
+                               "demand_mw"),
+        pred_demand_mw = pred
+      ) %>% 
+        mutate(idx = row_number())  # useful for plotting
+    )
+}
+```
+
+
+### Results
+
+```{r}
+demand.results <- demand.cv_df %>% 
+  filter(!is.na(pred)) %>% 
+  unnest(pred) %>% 
+  mutate(e = demand_mw - pred_demand_mw,
+         ae = abs(e)) %>% 
+  group_by(lr, nl) %>% 
+  summarise(mae = mean(ae),
+            rmse = sqrt(mean(e^2)),
+            .groups = "drop") %>% 
+  arrange(rmse)
+demand.results
+
+demand.results %>% 
+  mutate(lr = factor(lr),
+         nl = factor(nl)) %>% 
+  ggplot(aes(x = lr, y = nl, fill = rmse)) +
+  geom_tile() +
+  scale_fill_viridis_c(direction = -1)
+
+best_param <- demand.results %>% 
+  filter(rmse == min(rmse)) %>% 
+  select(lr, nl)
+
+demand.cv_df %>% 
+  filter(lr == best_param$lr,
+         nl == best_param$nl) %>% 
+  mutate(iter = row_number()) %>% 
+  unnest(pred) %>% 
+  select(iter, idx, ends_with("mw")) %>% 
+  pivot_longer(cols = ends_with("_mw")) %>% 
+  ggplot(aes(x = idx, y = value, colour = name)) + 
+  geom_line() + 
+  facet_wrap(~iter) +
+  labs(title = "Predictions and actuals for cross validation iterations",
+       subtitle = paste0("lr = ", best_param$lr, ", nl = ", best_param$nl))
+
+demand.cv_df %>% 
+  filter(lr == best_param$lr,
+         nl == best_param$nl) %>% 
+  mutate(iter = row_number()) %>% 
+  unnest(pred) %>% 
+  ggplot(aes(x = demand_mw, y = pred_demand_mw)) + 
+  geom_point() + 
+  geom_abline(intercept = 0, slope = 1, colour = "red", alpha = 0.5) +
+  facet_wrap(~iter) +
+  labs(title = "Predictions and actuals for cross validation iterations",
+       subtitle = paste0("lr = ", best_param$lr, ", nl = ", best_param$nl))
+```
+
+Best result is `lr = 0.1` and `nl = 8`.
+
+## Compare to lambda_l1
+
+The above numbers are consistently better (and faster to run) than regularization with only `lambda_l1`. Can compare by running the below code.
+
+```{r eval=TRUE}
+# cv2_df <- 
+#   cross_df(
+#     list(
+#       "nl" = 8L,
+#       "lr" = 0.1,
+#       "lambda_l1" = c(0.1, 1.0, 10),
+#       "cv" = cv_ts_folds(
+#         demand.data$datetime,
+#         start_date = start_date,
+#         horizon = 7,
+#         iterations = cv_iter
+#       ),
+#       "pred" = NA
+#     )
+#   ) %>%
+#   bind_rows(
+cv2_df <- cross_df(
+  list(
+    nl = 31L,
+    lr = 0.03,
+    lambda_l1 = exp(seq(-1,4)),
+    "cv" = cv_ts_folds(
+      demand.data$datetime,
+      start_date = start_date,
+      horizon = 7,
+      iterations = cv_iter
+    ),
+    "pred" = NA
+  )
+)
+
+for (i in 1:nrow(cv2_df)) {
+  print(paste0(i, "/", nrow(cv2_df), " : ", Sys.time()))
+  pred <- pred_demand(
+    demand.data[,-1],
+    cv2_df$cv[[i]]$train,
+    cv2_df$cv[[i]]$test,
+    nrounds = 250,
+    num_leaves = cv2_df$nl[i],
+    learning_rate = cv2_df$lr[i],
+    lambda_l1 = cv2_df$lambda_l1[i],
+    obj = "regression_l1",
+    metric = "regression_l1",
+  )
+  
+  cv2_df$pred[i] <- 
+    list(
+      tibble(
+        datetime = getElement(demand.data[cv2_df$cv[[i]]$test,], "datetime"),
+        demand_mw = getElement(demand.data[cv2_df$cv[[i]]$test,], "demand_mw"),
+        pred_demand_mw = pred
+      ) %>% 
+        mutate(idx = row_number())  # useful for plotting
+    )
+}
+
+results2 <- cv2_df %>% 
+  filter(!is.na(pred)) %>% 
+  unnest(pred) %>% 
+  mutate(e = demand_mw - pred_demand_mw,
+         ae = abs(e)) %>% 
+  group_by(lambda_l1, nl, lr) %>% 
+  summarise(mae = mean(ae),
+            rmse = sqrt(mean(e^2)),
+            .groups = "drop") %>% 
+  arrange(rmse)
+results2
+```
+
+
+# PV
+
+PV neds to be explored more. Optimal nl and lr paramaters give pv power predictions in the middle of the night. Sticking with L1 optimisation for the moment.
+
+```{r eval=FALSE}
+pv.cv_df <- cross_df(
+  list(
+    "lr" = c(0.05, 0.1, 0.2, 0.3),
+    "nl" = c(2, 4, 8, 16, 24),
+    "cv" = cv_ts_folds(
+      pv.data$datetime,
+      start_date = start_date,
+      horizon = 7,
+      iterations = cv_iter
+    ),
+    "pred" = NA
+  )
+)
+
+for (i in 1:nrow(pv.cv_df)) {
+  print(paste0(i, "/", nrow(pv.cv_df), " : ", Sys.time()))
+  pred <- pred_pv(
+    select(pv.data, -datetime),
+    pv.cv_df$cv[[i]]$train,
+    pv.cv_df$cv[[i]]$test,
+    nrounds = 500,
+    num_leaves = pv.cv_df$nl[i],
+    learning_rate = pv.cv_df$lr[i],
+    obj = "regression",
+    metric = "regression",
+  )
+  
+  pv.cv_df$pred[i] <- 
+    list(
+      tibble(
+        datetime = getElement(pv.data[pv.cv_df$cv[[i]]$test,], "datetime"),
+        pv_power_mw = getElement(pv.data[pv.cv_df$cv[[i]]$test,], "pv_power_mw"),
+        pred_pv_power_mw = pred
+      ) %>% 
+        mutate(idx = row_number())  # useful for plotting
+    )
+}
+```
+
+
+### Results
+
+```{r eval=FALSE}
+pv.results <- pv.cv_df %>% 
+  filter(!is.na(pred)) %>% 
+  unnest(pred) %>% 
+  mutate(e = pv_power_mw - pred_pv_power_mw,
+         ae = abs(e)) %>% 
+  group_by(lr, nl) %>% 
+  summarise(mae = mean(ae),
+            rmse = sqrt(mean(e^2)),
+            .groups = "drop") %>% 
+  arrange(rmse)
+pv.results
+
+pv.results %>% 
+  mutate(lr = factor(lr),
+         nl = factor(nl)) %>% 
+  ggplot(aes(x = lr, y = nl, fill = rmse)) +
+  geom_tile() +
+  scale_fill_viridis_c(direction = -1)
+
+best_param <- pv.results %>% 
+  filter(rmse == min(rmse)) %>% 
+  select(lr, nl)
+
+pv.cv_df %>% 
+  filter(lr == best_param$lr,
+         nl == best_param$nl) %>% 
+  mutate(iter = row_number()) %>% 
+  unnest(pred) %>% 
+  select(iter, idx, ends_with("mw")) %>% 
+  pivot_longer(cols = ends_with("_mw")) %>% 
+  ggplot(aes(x = idx, y = value, colour = name)) + 
+  geom_line() + 
+  facet_wrap(~iter) +
+  labs(title = "Predictions and actuals for cross validation iterations",
+       subtitle = paste0("lr = ", best_param$lr, ", nl = ", best_param$nl))
+
+pv.cv_df %>% 
+  filter(lr == best_param$lr,
+         nl == best_param$nl) %>% 
+  mutate(iter = row_number()) %>% 
+  unnest(pred) %>% 
+  ggplot(aes(x = pv_power_mw, y = pred_pv_power_mw)) + 
+  geom_point() + 
+  geom_abline(intercept = 0, slope = 1, colour = "red", alpha = 0.5) +
+  facet_wrap(~iter) +
+  labs(title = "Predictions and actuals for cross validation iterations",
+       subtitle = paste0("lr = ", best_param$lr, ", nl = ", best_param$nl))
+```
+
+Best result is `lr = 0.1` and `nl = 4`.
