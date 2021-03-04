@@ -32,8 +32,10 @@ start_date <- max(demand.data$datetime) + minutes(30) - days(7*cv_iter)
 ```{r}
 demand.cv_df <- cross_df(
   list(
-    "lr" = c(0.05, 0.1, 0.2, 0.3),
-    "nl" = c(4, 8, 16, 24, 32),
+    # "lr" = c(0.05, 0.1, 0.2),
+    # "nl" = c(4, 8, 16, 24),
+    "lr" = c(0.05, 0.1, 0.15),
+    "nl" = c(12, 16, 20),
     "cv" = cv_ts_folds(
       demand.data$datetime,
       start_date = start_date,
@@ -54,9 +56,19 @@ for (i in 1:nrow(demand.cv_df)) {
     min_data_in_leaf = 2,
     num_leaves = demand.cv_df$nl[i],
     learning_rate = demand.cv_df$lr[i],
-    obj = "regression",
-    metric = "regression",
+    obj = "mae",
+    metric = "mae",
   )
+  # pred <- pred_demand(
+  #   select(demand.data, -datetime),
+  #   demand.cv_df$cv[[i]]$train,
+  #   demand.cv_df$cv[[i]]$test,
+  #   nrounds = 500,
+  #   num_leaves = demand.cv_df$nl[i],
+  #   learning_rate = demand.cv_df$lr[i],
+  #   obj = "mae",
+  #   metric = "mae",
+  # )
   
   demand.cv_df$pred[i] <- 
     list(
@@ -85,21 +97,21 @@ demand.results <- demand.cv_df %>%
   summarise(mae = mean(ae),
             rmse = sqrt(mean(e^2)),
             .groups = "drop") %>% 
-  arrange(rmse)
+  arrange(mae)
 demand.results
 
 demand.results %>% 
   mutate(lr = factor(lr),
          nl = factor(nl)) %>% 
-  ggplot(aes(x = lr, y = nl, fill = rmse)) +
+  ggplot(aes(x = lr, y = nl, fill = mae)) +
   geom_tile() +
-  geom_text(aes(label = round(rmse, 4))) +
+  geom_text(aes(label = round(mae, 4))) +
   scale_fill_viridis_c(direction = -1) +
-  labs(title = "RMSE values",
+  labs(title = "MAE values",
        subtitle = paste0("Start date: ", start_date, ", iter: ", cv_iter))
 
 best_param <- demand.results %>% 
-  filter(rmse == min(rmse)) %>% 
+  filter(mae == min(mae)) %>% 
   select(lr, nl)
 
 demand.cv_df %>% 
@@ -134,7 +146,7 @@ Best result is `lr = 0.1` and `nl = 8`.
 
 The above numbers are consistently better (and faster to run) than regularization with only `lambda_l1`. Can compare by running the below code.
 
-```{r eval=TRUE}
+```{r eval=FALSE}
 # cv2_df <- 
 #   cross_df(
 #     list(
@@ -200,7 +212,7 @@ results2 <- cv2_df %>%
   summarise(mae = mean(ae),
             rmse = sqrt(mean(e^2)),
             .groups = "drop") %>% 
-  arrange(rmse)
+  arrange(mae)
 results2
 ```
 
@@ -262,18 +274,18 @@ pv.results <- pv.cv_df %>%
   summarise(mae = mean(ae),
             rmse = sqrt(mean(e^2)),
             .groups = "drop") %>% 
-  arrange(rmse)
+  arrange(mae)
 pv.results
 
 pv.results %>% 
   mutate(lr = factor(lr),
          nl = factor(nl)) %>% 
-  ggplot(aes(x = lr, y = nl, fill = rmse)) +
+  ggplot(aes(x = lr, y = nl, fill = mae)) +
   geom_tile() +
   scale_fill_viridis_c(direction = -1)
 
 best_param <- pv.results %>% 
-  filter(rmse == min(rmse)) %>% 
+  filter(mae == min(mae)) %>% 
   select(lr, nl)
 
 pv.cv_df %>% 
