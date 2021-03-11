@@ -43,7 +43,8 @@ add_lags <- function(data, lags = NULL) {
 #' @return
 #' @export
 #'
-#' @examples
+#' @importFrom dplyr mutate select group_by summarise ungroup arrange inner_join
+#' @importFrom tidyr pivot_longer
 add_features <- function(data) {
   data <- data %>% 
     mutate(date = date(datetime))

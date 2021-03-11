@@ -2,29 +2,36 @@ library(podEnergyComp)
 library(tidyverse)
 library(lubridate)
 
-fcst_start_date <- ymd("2019-03-10")
+fcst_start_date <- ymd("2019-12-18")
 demand.data <- load_demand_data()
 demand.cv <- cv_ts_folds(demand.data$datetime,
                          start_date = fcst_start_date,
                          horizon = 7, 
                          iterations = 1)
-demand.forecast <- pred_demand(demand.data[,-1],
-                               demand.cv[[1]]$train, 
-                               demand.cv[[1]]$test,
-                               objective = "regression")
+demand.forecast <- pred_demand(
+  select(demand.data, -datetime),
+  demand.cv[[1]]$train,
+  demand.cv[[1]]$test,
+  nrounds = 500L,
+  num_leaves = 10L,
+  learning_rate = 0.1,
+  obj = "regression",
+  metric = "regression"
+)
 pv.data <- load_pv_data()
 pv.cv <- cv_ts_folds(pv.data$datetime, 
                      start_date = fcst_start_date,
                      horizon = 7, 
                      iterations = 1)
-pv.forecast <- pred_pv(pv.data[,-1],
-                       pv.cv[[1]]$train,
-                       pv.cv[[1]]$test, 
-                       lambda_l1 = 1.5,
-                       num_leaves = 31L,
-                       learning_rate = 0.03,
-                       obj = "regression_l1",
-                       metric = "regression_l1")
+pv.forecast <- pred_pv_quantile(
+  pv.data,
+  pv.cv[[1]]$train,
+  pv.cv[[1]]$test,
+  alpha = seq(0.5,0.9),
+  num_iterations = 250L,
+  num_leaves = 31L,
+  learning_rate = 0.03
+)
 demand.pred_df <- tibble(
   datetime = getElement(demand.data[demand.cv[[1]]$test,], "datetime"),
   demand_mw = demand.forecast
