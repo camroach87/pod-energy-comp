@@ -29,13 +29,13 @@ start_date <- max(demand.data$datetime) + minutes(30) - days(7*cv_iter)
 
 ## Number of leaves and learning rate
 
+### All periods modelled together
+
 ```{r}
 demand.cv_df <- cross_df(
   list(
-    # "lr" = c(0.05, 0.1, 0.2),
-    # "nl" = c(4, 8, 16, 24),
     "lr" = c(0.05, 0.1, 0.15),
-    "nl" = c(12, 16, 20),
+    "nl" = c(8, 10, 12, 14),
     "cv" = cv_ts_folds(
       demand.data$datetime,
       start_date = start_date,
@@ -48,27 +48,16 @@ demand.cv_df <- cross_df(
 
 for (i in 1:nrow(demand.cv_df)) {
   print(paste0(i, "/", nrow(demand.cv_df), " : ", Sys.time()))
-  pred <- pred_demand_period(
+  pred <- pred_demand(
     select(demand.data, -datetime),
     demand.cv_df$cv[[i]]$train,
     demand.cv_df$cv[[i]]$test,
-    nrounds = 100,
-    min_data_in_leaf = 2,
+    nrounds = 500,
     num_leaves = demand.cv_df$nl[i],
     learning_rate = demand.cv_df$lr[i],
-    obj = "mae",
-    metric = "mae",
+    obj = "regression",
+    metric = "regression",
   )
-  # pred <- pred_demand(
-  #   select(demand.data, -datetime),
-  #   demand.cv_df$cv[[i]]$train,
-  #   demand.cv_df$cv[[i]]$test,
-  #   nrounds = 500,
-  #   num_leaves = demand.cv_df$nl[i],
-  #   learning_rate = demand.cv_df$lr[i],
-  #   obj = "mae",
-  #   metric = "mae",
-  # )
   
   demand.cv_df$pred[i] <- 
     list(
@@ -82,12 +71,7 @@ for (i in 1:nrow(demand.cv_df)) {
         mutate(idx = row_number())  # useful for plotting
     )
 }
-```
 
-
-### Results
-
-```{r}
 demand.results <- demand.cv_df %>% 
   filter(!is.na(pred)) %>% 
   unnest(pred) %>% 
@@ -97,21 +81,21 @@ demand.results <- demand.cv_df %>%
   summarise(mae = mean(ae),
             rmse = sqrt(mean(e^2)),
             .groups = "drop") %>% 
-  arrange(mae)
+  arrange(rmse)
 demand.results
 
 demand.results %>% 
   mutate(lr = factor(lr),
          nl = factor(nl)) %>% 
-  ggplot(aes(x = lr, y = nl, fill = mae)) +
+  ggplot(aes(x = lr, y = nl, fill = rmse)) +
   geom_tile() +
-  geom_text(aes(label = round(mae, 4))) +
+  geom_text(aes(label = round(rmse, 4))) +
   scale_fill_viridis_c(direction = -1) +
-  labs(title = "MAE values",
+  labs(title = "RMSE values",
        subtitle = paste0("Start date: ", start_date, ", iter: ", cv_iter))
 
 best_param <- demand.results %>% 
-  filter(mae == min(mae)) %>% 
+  filter(rmse == min(rmse)) %>% 
   select(lr, nl)
 
 demand.cv_df %>% 
@@ -141,6 +125,107 @@ demand.cv_df %>%
 ```
 
 Best result is `lr = 0.1` and `nl = 8`.
+
+
+### Periods modelled separately
+
+
+```{r eval = F}
+demand.cv_df <- cross_df(
+  list(
+    "lr" = c(0.03, 0.05),
+    "nl" = c(6, 8),
+    "cv" = cv_ts_folds(
+      demand.data$datetime,
+      start_date = start_date,
+      horizon = 7,
+      iterations = cv_iter
+    ),
+    "pred" = NA
+  )
+)
+
+for (i in 1:nrow(demand.cv_df)) {
+  print(paste0(i, "/", nrow(demand.cv_df), " : ", Sys.time()))
+  pred <- pred_demand_period(
+    select(demand.data, -datetime),
+    demand.cv_df$cv[[i]]$train,
+    demand.cv_df$cv[[i]]$test,
+    nrounds = 200,
+    min_data_in_leaf = 2,
+    num_leaves = demand.cv_df$nl[i],
+    learning_rate = demand.cv_df$lr[i],
+    obj = "regression",
+    metric = "regression",
+  )
+  
+  demand.cv_df$pred[i] <- 
+    list(
+      tibble(
+        datetime = getElement(demand.data[demand.cv_df$cv[[i]]$test,],
+                              "datetime"),
+        demand_mw = getElement(demand.data[demand.cv_df$cv[[i]]$test,],
+                               "demand_mw"),
+        pred_demand_mw = pred
+      ) %>% 
+        mutate(idx = row_number())  # useful for plotting
+    )
+}
+
+demand.results <- demand.cv_df %>% 
+  filter(!is.na(pred)) %>% 
+  unnest(pred) %>% 
+  mutate(e = demand_mw - pred_demand_mw,
+         ae = abs(e)) %>% 
+  group_by(lr, nl) %>% 
+  summarise(mae = mean(ae),
+            rmse = sqrt(mean(e^2)),
+            .groups = "drop") %>% 
+  arrange(rmse)
+demand.results
+
+demand.results %>% 
+  mutate(lr = factor(lr),
+         nl = factor(nl)) %>% 
+  ggplot(aes(x = lr, y = nl, fill = rmse)) +
+  geom_tile() +
+  geom_text(aes(label = round(rmse, 4))) +
+  scale_fill_viridis_c(direction = -1) +
+  labs(title = "RMSE values",
+       subtitle = paste0("Start date: ", start_date, ", iter: ", cv_iter))
+
+best_param <- demand.results %>% 
+  filter(rmse == min(rmse)) %>% 
+  select(lr, nl)
+
+demand.cv_df %>% 
+  filter(lr == best_param$lr,
+         nl == best_param$nl) %>% 
+  mutate(iter = row_number()) %>% 
+  unnest(pred) %>% 
+  select(iter, idx, ends_with("mw")) %>% 
+  pivot_longer(cols = ends_with("_mw")) %>% 
+  ggplot(aes(x = idx, y = value, colour = name)) + 
+  geom_line() + 
+  facet_wrap(~iter) +
+  labs(title = "Predictions and actuals for cross validation iterations",
+       subtitle = paste0("lr = ", best_param$lr, ", nl = ", best_param$nl))
+
+demand.cv_df %>% 
+  filter(lr == best_param$lr,
+         nl == best_param$nl) %>% 
+  mutate(iter = row_number()) %>% 
+  unnest(pred) %>% 
+  ggplot(aes(x = demand_mw, y = pred_demand_mw)) + 
+  geom_point() + 
+  geom_abline(intercept = 0, slope = 1, colour = "red", alpha = 0.5) +
+  facet_wrap(~iter) +
+  labs(title = "Predictions and actuals for cross validation iterations",
+       subtitle = paste0("lr = ", best_param$lr, ", nl = ", best_param$nl))
+```
+
+
+
 
 ## Compare to lambda_l1
 
@@ -212,7 +297,7 @@ results2 <- cv2_df %>%
   summarise(mae = mean(ae),
             rmse = sqrt(mean(e^2)),
             .groups = "drop") %>% 
-  arrange(mae)
+  arrange(rmse)
 results2
 ```
 
@@ -274,18 +359,18 @@ pv.results <- pv.cv_df %>%
   summarise(mae = mean(ae),
             rmse = sqrt(mean(e^2)),
             .groups = "drop") %>% 
-  arrange(mae)
+  arrange(rmse)
 pv.results
 
 pv.results %>% 
   mutate(lr = factor(lr),
          nl = factor(nl)) %>% 
-  ggplot(aes(x = lr, y = nl, fill = mae)) +
+  ggplot(aes(x = lr, y = nl, fill = rmse)) +
   geom_tile() +
   scale_fill_viridis_c(direction = -1)
 
 best_param <- pv.results %>% 
-  filter(mae == min(mae)) %>% 
+  filter(rmse == min(rmse)) %>% 
   select(lr, nl)
 
 pv.cv_df %>% 
