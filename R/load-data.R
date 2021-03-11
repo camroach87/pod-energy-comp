@@ -33,6 +33,49 @@ add_lags <- function(data, lags = NULL) {
 }
 
 
+#' Adds extra features
+#'
+#' Minimum, maximum and mean temperatures are calculated across all weather
+#' stations. Trend is a numeric variable increasing with date.
+#'
+#' @param data
+#'
+#' @return
+#' @export
+#'
+#' @examples
+add_features <- function(data) {
+  data <- data %>% 
+    mutate(date = date(datetime))
+  
+  temp_stats <- data %>% 
+    select(datetime, date, matches("temp_location[1-6]{1}$")) %>% 
+    pivot_longer(cols = -c(datetime, date), names_to = "location", 
+                 values_to = "temp") %>% 
+    group_by(date) %>% 
+    summarise(temp_min = min(temp, na.rm=T), 
+              temp_max = max(temp, na.rm=T), 
+              temp_mean = mean(temp, na.rm=T)) %>% 
+    ungroup() %>% 
+    arrange(date) %>% 
+    mutate(temp_min_yday = lag(temp_min, 1),
+           temp_max_yday = lag(temp_max, 1),
+           temp_mean_yday = lag(temp_mean, 1)) %>% 
+    select(date, temp_min_yday, temp_max_yday, temp_mean_yday)
+  
+  data <- data %>% 
+    inner_join(temp_stats, by = "date")
+  
+  # Add trend
+  data <- data %>% 
+    mutate(trend = as.numeric(date),
+           trend = trend - min(trend) + 1) %>% 
+    select(-date)
+  
+  data
+}
+
+
 #' Load PV data
 #'
 #' @return Data frame containing PV generation (MW) data and required features
@@ -94,6 +137,7 @@ load_demand_data <- function() {
         "solar_location6" = c(1,2,6,12,24,48,96)
       )
     ) %>% 
+    add_features() %>% 
     select(-pv_power_mw) %>% 
     mutate(period = hh_to_period(datetime),
            month = month(datetime),
