@@ -101,7 +101,7 @@ load_demand_data <- function() {
            wday = wday(datetime, week_start = 1)) %>%  # 1 = Monday
     slice(-c(1:(48*7))) %>%  # removes first 7 days missing week-lagged demand data
     filter(period %in% 32:42,  # train with charging periods only
-           date(datetime) != ymd("2018-05-08"),  # outlier 0 demand
-           date(datetime) != ymd("2018-05-10"),  # outlier high demand
-           date(datetime) != ymd("2018-11-04"))  # outlier high demand
+           date(datetime) != ymd("2018-05-08")) #,  # outlier 0 demand
+           # date(datetime) != ymd("2018-05-10"),  # outlier high demand
+           # date(datetime) != ymd("2018-11-04"))  # outlier high demand
 }
