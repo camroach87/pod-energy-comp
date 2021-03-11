@@ -12,7 +12,7 @@ library(podEnergyComp)
 library(tidyverse)
 library(lubridate)
 
-fcst_start_date <- ymd("2019-12-11")
+fcst_start_date <- ymd("2019-12-18")
 
 # predict PV and demand
 demand.data <- load_demand_data()
@@ -25,39 +25,25 @@ demand.forecast <- pred_demand(
   demand.cv[[1]]$train,
   demand.cv[[1]]$test,
   nrounds = 500L,
-  num_leaves = 8L,
+  num_leaves = 10L,
   learning_rate = 0.1,
   obj = "regression",
   metric = "regression"
 )
-# demand.forecast <- pred_demand_period(
-#   select(demand.data, -datetime),
-#   demand.cv[[1]]$train,
-#   demand.cv[[1]]$test,
-#   nrounds = 100,
-#   min_data_in_leaf = 2,
-#   num_leaves = 16L,
-#   learning_rate = 0.1,
-#   obj = "regression",
-#   metric = "regression"
-# )
 
 pv.data <- load_pv_data()
 pv.cv <- cv_ts_folds(pv.data$datetime, 
                      start_date = fcst_start_date,
                      horizon = 7, 
                      iterations = 1)
-
-pv.forecast <- pred_pv(
-  select(pv.data, -datetime),
+pv.forecast <- pred_pv_quantile(
+  pv.data,
   pv.cv[[1]]$train,
   pv.cv[[1]]$test,
-  nrounds = 250L,
-  lambda_l1 = 1.5,
+  alpha = seq(0.5,0.9,0.02),
+  num_iterations = 250L,
   num_leaves = 31L,
-  learning_rate = 0.03,
-  obj = "regression_l1",
-  metric = "regression_l1"
+  learning_rate = 0.03
 )
 
 # Tidy predictions
