@@ -5,7 +5,7 @@
 \alias{pod}
 \title{Data for POD battery scheduling competition}
 \format{
-An object of class \code{tbl_df} (inherits from \code{tbl}, \code{data.frame}) with 37536 rows and 16 columns.
+An object of class \code{tbl_df} (inherits from \code{tbl}, \code{data.frame}) with 47040 rows and 16 columns.
 }
 \usage{
 pod
