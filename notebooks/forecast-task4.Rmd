@@ -1,0 +1,133 @@
+---
+title: "Task 2 forecast"
+author: "Cameron Roach"
+date: "27/02/2021"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+library(podEnergyComp)
+library(tidyverse)
+library(lubridate)
+
+fcst_start_date <- ymd("2020-07-03")
+
+# predict PV and demand
+demand.data <- load_demand_data()
+demand.cv <- cv_ts_folds(demand.data$datetime,
+                         start_date = fcst_start_date,
+                         horizon = 7, 
+                         iterations = 1)
+demand.forecast <- pred_demand(
+  select(demand.data, -datetime),
+  demand.cv[[1]]$train,
+  demand.cv[[1]]$test,
+  nrounds = 500L,
+  num_leaves = 10L,
+  learning_rate = 0.1,
+  obj = "regression",
+  metric = "regression"
+)
+
+pv.data <- load_pv_data()
+pv.cv <- cv_ts_folds(pv.data$datetime, 
+                     start_date = fcst_start_date,
+                     horizon = 7, 
+                     iterations = 1)
+pv.forecast <- pred_pv_quantile(
+  pv.data,
+  pv.cv[[1]]$train,
+  pv.cv[[1]]$test,
+  alpha = seq(0.5,0.9,0.02),
+  num_iterations = 250L,
+  num_leaves = 31L,
+  learning_rate = 0.03
+)
+
+# Tidy predictions
+demand.pred_df <- tibble(
+  datetime = getElement(demand.data[demand.cv[[1]]$test,], "datetime"),
+  demand_mw = demand.forecast
+)
+pv.pred_df <- tibble(
+  datetime = getElement(pv.data[pv.cv[[1]]$test,], "datetime"),
+  pv_power_mw = pv.forecast
+)
+fcst_df <- full_join(pv.pred_df, demand.pred_df, by = "datetime") %>% 
+  mutate(period = 2*hour(datetime) + minute(datetime)/30 + 1) %>% 
+  arrange(datetime)
+
+# schedule battery
+b_sched <- schedule_battery(fcst_df)
+bat_df <- format_charge_data(b_sched$B)
+
+# save results
+write_csv(bat_df,
+          file = "../inst/extdata/pod_ds_task4/Cameron_set4.csv")
+```
+
+
+## Checks
+
+```{r}
+fcst_df %>% 
+  select(datetime, demand_mw, pv_power_mw) %>% 
+  pivot_longer(-datetime) %>% 
+  ggplot(aes(x = datetime, y = value, colour = name)) +
+  geom_line()
+
+fcst_df %>% 
+  select(datetime, pred = demand_mw) %>% 
+  inner_join(select(demand.data, datetime, demand_mw), by = "datetime") %>% 
+  mutate(idx = row_number()) %>% 
+  select(idx, demand_mw, pred) %>% 
+  pivot_longer(-idx) %>% 
+  ggplot(aes(x = idx, y = value, colour = name)) +
+  geom_line()
+
+fcst_df %>% 
+  select(datetime, pred = pv_power_mw) %>% 
+  inner_join(select(pv.data, datetime, pv_power_mw), by = "datetime") %>% 
+  pivot_longer(-datetime) %>% 
+  ggplot(aes(x = datetime, y = value, colour = name)) + 
+  geom_line()
+
+# TODO: convert these to tests that a user can run with test_schedule command
+# FIXME: some rounding errors introduced when correcting for C > 6 MWh
+matplot(t(b_sched$B), type = "l")
+matplot(t(b_sched$C), type = "l")
+table(b_sched$C[,2:32] == 0.5*t(apply(b_sched$B, 1, cumsum))[,1:31])
+table(abs(b_sched$C[,2:32] - 0.5*t(apply(b_sched$B, 1, cumsum))[,1:31]) < 1e-12)
+min(b_sched$B, na.rm=T) >= -2.5
+max(b_sched$B, na.rm=T) <= 2.5
+max(apply(t(b_sched$B[,1:31]), 2, cumsum)) <= 12
+max(apply(t(b_sched$B[,1:31]), 2, cumsum)) - 12
+max(b_sched$C) <= 6
+min(b_sched$C) == 0
+all(b_sched$B[,32:42] <= 0)
+all(b_sched$B[,1:31] >= 0)
+
+# check battery data frame
+bla <- bat_df %>% 
+  group_by(date = date(datetime)) %>% 
+  mutate(cumsum_charge_MW = cumsum(charge_MW))
+max(bla$cumsum_charge_MW) - 12 == 0
+
+ggplot(bat_df, aes(x = datetime, y = charge_MW)) + 
+  geom_line()
+
+bat_df %>% 
+  inner_join(fcst_df, by = "datetime") %>% 
+  inner_join(select(demand.data, datetime, act_demand_mw = demand_mw), 
+             by = "datetime") %>% 
+  mutate(demand_red_mw = demand_mw + charge_MW,
+         act_demand_red_mw = act_demand_mw + charge_MW,
+         idx = row_number()) %>% 
+  select(idx, demand_mw, demand_red_mw, act_demand_mw, act_demand_red_mw) %>% 
+  pivot_longer(cols = -idx) %>% 
+  ggplot(aes(x = idx, y = value, colour = name)) +
+  geom_line() +
+  ylim(0, NA)
+```
