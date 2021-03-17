@@ -78,6 +78,8 @@ pred_pv <- function(data,
 #'
 #' @return
 #' @export
+#' 
+#' @importFrom dplyr pull
 pred_pv_quantile <- function(data,
                              train_idx,
                              test_idx,
