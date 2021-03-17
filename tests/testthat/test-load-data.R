@@ -1,3 +1,5 @@
+library(dplyr)
+
 demand.data <- load_demand_data()
 
 test_that("public holidays load", {
@@ -29,7 +31,7 @@ test_that("demand loads correctly", {
 })
 
 test_that("leap years adjusted correctly", {
-  expect_equal(max(demand.data$yday) == 365)
+  expect_equal(max(demand.data$yday), 365)
   demand.data %>% 
     filter(between(date(datetime), ymd("2020-01-01"), ymd("2020-02-28"))) %>% 
     distinct(yday) %>% 
