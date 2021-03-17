@@ -159,9 +159,9 @@ load_demand_data <- function() {
 #' 
 #' @importFrom lubridate yday leap_year
 yday_ly_adj <- function(x) {
-  x_yday <- yday(x)
   x_ly <- leap_year(x)
-  x_yday[x_ly & x_yday == 60] <- 59.5  # 29 Feb
-  x_yday[x_ly & x_yday > 60] <- x_yday[x_ly & x_yday > 60] - 1  # > 29 Feb
-  x_yday
+  x <- yday(x)
+  x[x_ly & x == 60] <- 59.5                 # 29 Feb
+  x[x_ly & x > 60] <- x[x_ly & x > 60] - 1  # > 29 Feb
+  x
 }
