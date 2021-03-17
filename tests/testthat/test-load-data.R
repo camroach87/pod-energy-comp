@@ -27,3 +27,22 @@ test_that("demand loads correctly", {
   expect_gt(min(demand.summ$demand_mw, na.rm = T), 2)
   expect_lt(max(demand.summ$demand_mw, na.rm = T), 80)
 })
+
+test_that("leap years adjusted correctly", {
+  expect_equal(max(demand.data$yday) == 365)
+  demand.data %>% 
+    filter(between(date(datetime), ymd("2020-01-01"), ymd("2020-02-28"))) %>% 
+    distinct(yday) %>% 
+    pull() %>% 
+    expect_equal(1:59)
+  demand.data %>% 
+    filter(date(datetime) == ymd("2020-02-29")) %>% 
+    distinct(yday) %>% 
+    pull() %>% 
+    expect_equal(59.5)
+  demand.data %>% 
+    filter(date(datetime) > ymd("2020-02-29")) %>% 
+    distinct(yday) %>% 
+    pull() %>% 
+    expect_equal(60:190)
+})

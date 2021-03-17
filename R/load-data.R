@@ -107,7 +107,7 @@ load_pv_data <- function() {
     select(-demand_mw) %>% 
     mutate(period = hh_to_period(datetime),
            month = month(datetime),
-           yday = yday(datetime)) %>% 
+           yday = yday_ly_adj(datetime)) %>% 
     slice(-c(1:(48*7)))  # removes first 7 days missing week-lagged PV data
 }
 
@@ -142,11 +142,26 @@ load_demand_data <- function() {
     select(-pv_power_mw) %>% 
     mutate(period = hh_to_period(datetime),
            month = month(datetime),
-           yday = yday(datetime),
+           yday = yday_ly_adj(datetime),
            wday = wday(datetime, week_start = 1)) %>%  # 1 = Monday
     slice(-c(1:(48*7))) %>%  # removes first 7 days missing week-lagged demand data
     filter(period %in% 32:42,  # train with charging periods only
            date(datetime) != ymd("2018-05-08"),  # outlier 0 demand
            date(datetime) != ymd("2018-05-10"),  # outlier high demand
            date(datetime) != ymd("2018-11-04"))  # outlier high demand
+}
+
+#' Adjust yday for leap years
+#' 
+#' Adjusts yday values for leap years. 29 February is now assigned 59.5 and following dates are assigned their original yday minus 1. This ensures yday values are consistent with dates across all years.
+#'
+#' @param x (datetime) vector of datetime values.
+#' 
+#' @importFrom lubridate yday leap_year
+yday_ly_adj <- function(x) {
+  x_yday <- yday(x)
+  x_ly <- leap_year(x)
+  x_yday[x_ly & x_yday == 60] <- 59.5  # 29 Feb
+  x_yday[x_ly & x_yday > 60] <- x_yday[x_ly & x_yday > 60] - 1  # > 29 Feb
+  x_yday
 }
