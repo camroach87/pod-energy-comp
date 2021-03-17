@@ -1,4 +1,4 @@
-# Data from: https://www.calendarpedia.co.uk,,
+# Data from: https://www.calendarpedia.co.uk
 Date,Holiday,Day
 "January 2nd, 2017",Substitute day (for New Year's Day),Monday
 "April 14th, 2017",Good Friday,Friday
@@ -24,3 +24,11 @@ Date,Holiday,Day
 "August 26th, 2019",August Bank Holiday,Monday
 "December 25th, 2019",Christmas Day,Wednesday
 "December 26th, 2019",Boxing Day,Thursday
+"January 1st, 2020",New Year's Day,Wednesday
+"April 10th, 2020",Good Friday,Friday
+"April 13th, 2020",Easter Monday,Monday
+"May 8th, 2020",Early May Bank Holiday (VE Day),	Friday
+"May 25th, 2020",Spring Bank Holiday,Monday
+"August 31st, 2020",August Bank Holiday,Monday
+"December 25th, 2020",Christmas Day,Friday
+"December 28th, 2020",Substitute day (for Boxing Day),Monday
