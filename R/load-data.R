@@ -49,6 +49,7 @@ add_features <- function(data) {
   data <- data %>% 
     mutate(date = date(datetime))
   
+  # Calculate yesterday's max, min, mean temperatures
   temp_stats <- data %>% 
     select(datetime, date, matches("temp_location[1-6]{1}$")) %>% 
     pivot_longer(cols = -c(datetime, date), names_to = "location", 
@@ -87,6 +88,7 @@ add_features <- function(data) {
 #' @importFrom lubridate yday month
 load_pv_data <- function() {
   pod %>% 
+    select(-demand_mw) %>% 
     add_lags(
       lags = list(
         "pv_power_mw" = 48*7,
@@ -104,7 +106,6 @@ load_pv_data <- function() {
         "solar_location6" = 1:6
       )
     ) %>% 
-    select(-demand_mw) %>% 
     mutate(period = hh_to_period(datetime),
            month = month(datetime),
            yday = yday_ly_adj(datetime)) %>% 
@@ -117,10 +118,11 @@ load_pv_data <- function() {
 #'   training demand model.
 #' @export
 #' 
-#' @importFrom dplyr select mutate filter slice
+#' @importFrom dplyr select mutate filter slice if_else between summarise ungroup
 #' @importFrom lubridate yday wday month ymd date
 load_demand_data <- function() {
   pod %>% 
+    select(-pv_power_mw) %>% 
     add_lags(
       lags = list(
         "demand_mw" = 48*7,
@@ -139,17 +141,22 @@ load_demand_data <- function() {
       )
     ) %>% 
     add_features() %>% 
-    select(-pv_power_mw) %>% 
-    mutate(period = hh_to_period(datetime),
-           month = month(datetime),
-           yday = yday_ly_adj(datetime),
-           wday = wday(datetime, week_start = 1)) %>%  # 1 = Monday
+    mutate(
+      # lockdown = if_else(between(date(datetime), ymd("2020-03-23"),
+      #                            ymd("2020-06-23")), 1, 0),
+      period = hh_to_period(datetime),
+      yday = yday_ly_adj(datetime),
+      wday = wday(datetime, week_start = 1)  # 1 = Monday
+    ) %>%  
     slice(-c(1:(48*7))) %>%  # removes first 7 days missing week-lagged demand data
-    filter(period %in% 32:42,  # train with charging periods only
-           date(datetime) != ymd("2018-05-08"),  # outlier 0 demand
-           date(datetime) != ymd("2018-05-10"),  # outlier high demand
-           date(datetime) != ymd("2018-11-04"))  # outlier high demand
+    filter(
+      period %in% 32:42,  # FIXME: Hard coded. Train with charging periods only
+      date(datetime) != ymd("2018-05-08"),  # outlier 0 demand
+      date(datetime) != ymd("2018-05-10"),  # outlier high demand
+      date(datetime) != ymd("2018-11-04")   # outlier high demand
+    )
 }
+
 
 #' Adjust yday for leap years
 #' 
