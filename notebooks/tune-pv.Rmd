@@ -1,0 +1,115 @@
+---
+title: "Tune PV"
+author: "Cameron Roach"
+date: "19/03/2021"
+output: html_document
+---
+
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+library(tidyverse)
+library(lubridate)
+library(lightgbm)
+library(podEnergyComp)
+
+pv.data <- load_pv_data() %>% 
+  filter(!is.na(pv_power_mw))
+
+cv_iter <- 5
+start_date <- max(pv.data$datetime) + minutes(30) - days(7*cv_iter)
+```
+
+
+# PV
+
+PV neds to be explored more. Optimal nl and lr paramaters give pv power predictions in the middle of the night. Sticking with L1 optimisation for the moment.
+
+```{r eval=TRUE}
+pv.cv_df <- cross_df(
+  list(
+    "lr" = c(0.05, 0.1, 0.2, 0.3),
+    "nl" = c(4, 8, 16),
+    "cv" = cv_ts_folds(
+      pv.data$datetime,
+      start_date = start_date,
+      horizon = 7,
+      iterations = cv_iter
+    ),
+    "pred" = NA
+  )
+)
+
+for (i in 1:nrow(pv.cv_df)) {
+  print(paste0(i, "/", nrow(pv.cv_df), " : ", Sys.time()))
+  pred <- pred_pv(
+    select(pv.data, -datetime),
+    pv.cv_df$cv[[i]]$train,
+    pv.cv_df$cv[[i]]$test,
+    nrounds = 500,
+    num_leaves = pv.cv_df$nl[i],
+    learning_rate = pv.cv_df$lr[i],
+    obj = "regression",
+    metric = "regression",
+  )
+  
+  pv.cv_df$pred[i] <- 
+    list(
+      tibble(
+        datetime = getElement(pv.data[pv.cv_df$cv[[i]]$test,], "datetime"),
+        pv_power_mw = getElement(pv.data[pv.cv_df$cv[[i]]$test,], "pv_power_mw"),
+        pred_pv_power_mw = pred
+      ) %>% 
+        mutate(idx = row_number())  # useful for plotting
+    )
+}
+
+pv.results <- pv.cv_df %>% 
+  filter(!is.na(pred)) %>% 
+  unnest(pred) %>% 
+  mutate(e = pv_power_mw - pred_pv_power_mw,
+         ae = abs(e)) %>% 
+  group_by(lr, nl) %>% 
+  summarise(mae = mean(ae),
+            rmse = sqrt(mean(e^2)),
+            .groups = "drop") %>% 
+  arrange(rmse)
+pv.results
+
+pv.results %>% 
+  mutate(lr = factor(lr),
+         nl = factor(nl)) %>% 
+  ggplot(aes(x = lr, y = nl, fill = rmse)) +
+  geom_tile() +
+  scale_fill_viridis_c(direction = -1)
+
+best_param <- pv.results %>% 
+  filter(rmse == min(rmse)) %>% 
+  select(lr, nl)
+
+pv.cv_df %>% 
+  filter(lr == best_param$lr,
+         nl == best_param$nl) %>% 
+  mutate(iter = row_number()) %>% 
+  unnest(pred) %>% 
+  select(iter, idx, ends_with("mw")) %>% 
+  pivot_longer(cols = ends_with("_mw")) %>% 
+  ggplot(aes(x = idx, y = value, colour = name)) + 
+  geom_line() + 
+  facet_wrap(~iter) +
+  labs(title = "Predictions and actuals for cross validation iterations",
+       subtitle = paste0("lr = ", best_param$lr, ", nl = ", best_param$nl))
+
+pv.cv_df %>% 
+  filter(lr == best_param$lr,
+         nl == best_param$nl) %>% 
+  mutate(iter = row_number()) %>% 
+  unnest(pred) %>% 
+  ggplot(aes(x = pv_power_mw, y = pred_pv_power_mw)) + 
+  geom_point() + 
+  geom_abline(intercept = 0, slope = 1, colour = "red", alpha = 0.5) +
+  facet_wrap(~iter) +
+  labs(title = "Predictions and actuals for cross validation iterations",
+       subtitle = paste0("lr = ", best_param$lr, ", nl = ", best_param$nl))
+```
