@@ -12,7 +12,7 @@ library(podEnergyComp)
 library(tidyverse)
 library(lubridate)
 
-fcst_start_date <- ymd("2020-06-26")
+fcst_start_date <- ymd("2020-07-03")
 
 # predict PV and demand
 demand.data <- load_demand_data()
@@ -40,7 +40,7 @@ pv.forecast <- pred_pv_quantile(
   pv.data,
   pv.cv[[1]]$train,
   pv.cv[[1]]$test,
-  alpha = seq(0.5,0.9,0.02),
+  alpha = 0.5, # High PV generation so don't need to fit all quantiles
   num_iterations = 250L,
   num_leaves = 31L,
   learning_rate = 0.03
