@@ -29,8 +29,8 @@ PV neds to be explored more. Optimal nl and lr paramaters give pv power predicti
 ```{r eval=TRUE}
 pv.cv_df <- cross_df(
   list(
-    "lr" = c(0.05, 0.1, 0.2, 0.3),
-    "nl" = c(4, 8, 16),
+    "lr" = c(0.175, 0.2, 0.225),
+    "nl" = c(3, 4, 5),
     "cv" = cv_ts_folds(
       pv.data$datetime,
       start_date = start_date,
@@ -52,6 +52,7 @@ for (i in 1:nrow(pv.cv_df)) {
     learning_rate = pv.cv_df$lr[i],
     obj = "regression",
     metric = "regression",
+    boosting = "gbdt"
   )
   
   pv.cv_df$pred[i] <- 
@@ -82,7 +83,10 @@ pv.results %>%
          nl = factor(nl)) %>% 
   ggplot(aes(x = lr, y = nl, fill = rmse)) +
   geom_tile() +
-  scale_fill_viridis_c(direction = -1)
+  geom_text(aes(label = round(rmse, 4))) +
+  scale_fill_viridis_c(direction = -1) +
+  labs(title = "RMSE values",
+       subtitle = paste0("Start date: ", start_date, ", iter: ", cv_iter))
 
 best_param <- pv.results %>% 
   filter(rmse == min(rmse)) %>% 
@@ -112,4 +116,5 @@ pv.cv_df %>%
   facet_wrap(~iter) +
   labs(title = "Predictions and actuals for cross validation iterations",
        subtitle = paste0("lr = ", best_param$lr, ", nl = ", best_param$nl))
+
 ```
