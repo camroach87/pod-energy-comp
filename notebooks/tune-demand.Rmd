@@ -31,7 +31,7 @@ start_date <- max(demand.data$datetime) + minutes(30) - days(7*cv_iter)
 
 ### All periods modelled together
 
-```{r}
+```{r eval = F}
 demand.cv_df <- cross_df(
   list(
     "lr" = c(0.05, 0.1, 0.15),
@@ -57,6 +57,7 @@ for (i in 1:nrow(demand.cv_df)) {
     learning_rate = demand.cv_df$lr[i],
     obj = "regression",
     metric = "regression",
+    boosting = "gbdt"
   )
   
   demand.cv_df$pred[i] <- 
@@ -124,17 +125,14 @@ demand.cv_df %>%
        subtitle = paste0("lr = ", best_param$lr, ", nl = ", best_param$nl))
 ```
 
-Best result is `lr = 0.1` and `nl = 8`.
-
-
 ### Periods modelled separately
 
 
-```{r eval = F}
+```{r eval = T}
 demand.cv_df <- cross_df(
   list(
-    "lr" = c(0.03, 0.05),
-    "nl" = c(6, 8),
+    "lr" = c(0.05, 0.06, 0.07, 0.08, 0.09),
+    "nl" = c(6, 8, 12),
     "cv" = cv_ts_folds(
       demand.data$datetime,
       start_date = start_date,
@@ -157,6 +155,7 @@ for (i in 1:nrow(demand.cv_df)) {
     learning_rate = demand.cv_df$lr[i],
     obj = "regression",
     metric = "regression",
+    boosting = "gbdt"
   )
   
   demand.cv_df$pred[i] <- 
@@ -222,8 +221,31 @@ demand.cv_df %>%
   facet_wrap(~iter) +
   labs(title = "Predictions and actuals for cross validation iterations",
        subtitle = paste0("lr = ", best_param$lr, ", nl = ", best_param$nl))
-```
 
+
+# demand.results <- demand.cv_df %>% 
+#   filter(!is.na(pred)) %>% 
+#   unnest(pred) %>% 
+#   mutate(period = hour(datetime)*2 + minute(datetime)/30 + 1,
+#          e = demand_mw - pred_demand_mw,
+#          ae = abs(e)) %>% 
+#   group_by(period, lr, nl) %>% 
+#   summarise(mae = mean(ae),
+#             rmse = sqrt(mean(e^2)),
+#             .groups = "drop") %>% 
+#   arrange(rmse)
+# 
+# demand.results %>% 
+#   filter(period == 42) %>% 
+#   mutate(lr = factor(lr),
+#          nl = factor(nl)) %>% 
+#   ggplot(aes(x = lr, y = nl, fill = rmse)) +
+#   geom_tile() +
+#   geom_text(aes(label = round(rmse, 4))) +
+#   scale_fill_viridis_c(direction = -1) +
+#   labs(title = "RMSE values",
+#        subtitle = paste0("Start date: ", start_date, ", iter: ", cv_iter))
+```
 
 
 
@@ -232,22 +254,6 @@ demand.cv_df %>%
 The above numbers are consistently better (and faster to run) than regularization with only `lambda_l1`. Can compare by running the below code.
 
 ```{r eval=FALSE}
-# cv2_df <- 
-#   cross_df(
-#     list(
-#       "nl" = 8L,
-#       "lr" = 0.1,
-#       "lambda_l1" = c(0.1, 1.0, 10),
-#       "cv" = cv_ts_folds(
-#         demand.data$datetime,
-#         start_date = start_date,
-#         horizon = 7,
-#         iterations = cv_iter
-#       ),
-#       "pred" = NA
-#     )
-#   ) %>%
-#   bind_rows(
 cv2_df <- cross_df(
   list(
     nl = 31L,
