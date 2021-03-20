@@ -4,7 +4,7 @@ library(tidyverse)
 library(tidyselect)
 library(lubridate)
 
-path = file.path("inst", "extdata", "pod_ds_task4")
+path = file.path("inst", "extdata", "final")
 locations = 1:6
 inc_pv_cond = F
 
