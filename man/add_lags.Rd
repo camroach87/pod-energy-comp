@@ -15,7 +15,7 @@ should be specified as number of half-hourly periods, e.g., c(1, 3, 5) will
 create 30, 90 and 150 minute lags.}
 }
 \value{
-Data frame with additional lags
+Data frame with additional lags.
 }
 \description{
 Add lags

@@ -26,6 +26,7 @@
 #' @importFrom lubridate date
 #' @importFrom dplyr mutate select 
 #' @importFrom tidyr pivot_wider
+#' @importFrom rlang .data
 schedule_battery <- function(data) {
   fill_missing_periods <- function(x) {
     missing_periods <- c(1:48)[!(1:48 %in% colnames(x))]
@@ -39,21 +40,21 @@ schedule_battery <- function(data) {
   
   date_list <- unique(date(data$datetime))
   data <- data %>% 
-    mutate(date = date(datetime))
+    mutate(date = date(.data$datetime))
   P <- data %>%
-    select(date, period, pv_power_mw) %>% 
-    pivot_wider(id_cols = date, 
-                names_from = period, 
-                values_from = pv_power_mw) %>% 
+    select(.data$date, .data$period, .data$pv_power_mw) %>% 
+    pivot_wider(id_cols = .data$date, 
+                names_from = .data$period, 
+                values_from = .data$pv_power_mw) %>% 
     column_to_rownames("date") %>% 
     as.matrix() %>% 
     fill_missing_periods()
   
   L <- data %>% 
-    select(date, period, demand_mw) %>% 
-    pivot_wider(id_cols = date, 
-                names_from = period, 
-                values_from = demand_mw) %>% 
+    select(.data$date, .data$period, .data$demand_mw) %>% 
+    pivot_wider(id_cols = .data$date, 
+                names_from = .data$period, 
+                values_from = .data$demand_mw) %>% 
     column_to_rownames("date") %>% 
     as.matrix() %>% 
     fill_missing_periods()
@@ -138,15 +139,16 @@ schedule_battery <- function(data) {
 #' @importFrom dplyr as_tibble mutate arrange select row_number
 #' @importFrom tidyr pivot_longer
 #' @importFrom lubridate as_datetime minutes
+#' @importFrom rlang .data
 format_charge_data <- function(B) {
   B %>% 
     as_tibble(rownames = "date") %>% 
-    pivot_longer(cols = -date,
+    pivot_longer(cols = -.data$date,
                  names_to = "period", 
                  values_to = "charge_MW") %>% 
-    mutate(period = as.numeric(period),
-           datetime = as_datetime(date) + minutes(30*(period-1))) %>% 
-    arrange(datetime) %>% 
+    mutate(period = as.numeric(.data$period),
+           datetime = as_datetime(.data$date) + minutes(30*(.data$period-1))) %>% 
+    arrange(.data$datetime) %>% 
     mutate(`_id` = row_number()) %>% 
-    select(`_id`, datetime, charge_MW)
+    select(.data$`_id`, .data$datetime, .data$charge_MW)
 }

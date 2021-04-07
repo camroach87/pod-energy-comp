@@ -6,12 +6,13 @@
 #'   should be specified as number of half-hourly periods, e.g., c(1, 3, 5) will
 #'   create 30, 90 and 150 minute lags.
 #'
-#' @return Data frame with additional lags
+#' @return Data frame with additional lags.
 #' @export
 #'
 #' @importFrom dplyr bind_cols select
 #' @importFrom tidyselect peek_vars
 #' @importFrom purrr map
+#' @importFrom rlang .data
 add_lags <- function(data, lags = NULL) {
   lag_list <- list()
   if (!is.null(lags)) {
@@ -27,7 +28,7 @@ add_lags <- function(data, lags = NULL) {
   # Tidy output
   data <- data %>% 
     bind_cols(lag_list) %>% 
-    select(datetime, sort(peek_vars()))
+    select(.data$datetime, sort(peek_vars()))
   
   data
 }
@@ -38,41 +39,44 @@ add_lags <- function(data, lags = NULL) {
 #' Minimum, maximum and mean temperatures are calculated across all weather
 #' stations. Trend is a numeric variable increasing with date.
 #'
-#' @param data
+#' @param data (data frame) Data with variables to create features for.
 #'
-#' @return
+#' @return Data frame with additional features.
 #' @export
 #'
-#' @importFrom dplyr mutate select group_by summarise ungroup arrange inner_join
+#' @importFrom dplyr mutate select group_by summarise ungroup arrange inner_join lag
+#' @importFrom tidyselect matches
 #' @importFrom tidyr pivot_longer
+#' @importFrom rlang .data
 add_features <- function(data) {
   data <- data %>% 
-    mutate(date = date(datetime))
+    mutate(date = date(.data$datetime))
   
   # Calculate yesterday's max, min, mean temperatures
   temp_stats <- data %>% 
-    select(datetime, date, matches("temp_location[1-6]{1}$")) %>% 
-    pivot_longer(cols = -c(datetime, date), names_to = "location", 
+    select(.data$datetime, .data$date, matches("temp_location[1-6]{1}$")) %>% 
+    pivot_longer(cols = -c(.data$datetime, .data$date), names_to = "location", 
                  values_to = "temp") %>% 
-    group_by(date) %>% 
-    summarise(temp_min = min(temp, na.rm=T), 
-              temp_max = max(temp, na.rm=T), 
-              temp_mean = mean(temp, na.rm=T)) %>% 
+    group_by(.data$date) %>% 
+    summarise(temp_min = min(.data$temp, na.rm=T), 
+              temp_max = max(.data$temp, na.rm=T), 
+              temp_mean = mean(.data$temp, na.rm=T)) %>% 
     ungroup() %>% 
-    arrange(date) %>% 
-    mutate(temp_min_yday = lag(temp_min, 1),
-           temp_max_yday = lag(temp_max, 1),
-           temp_mean_yday = lag(temp_mean, 1)) %>% 
-    select(date, temp_min_yday, temp_max_yday, temp_mean_yday)
+    arrange(.data$date) %>% 
+    mutate(temp_min_yday = lag(.data$temp_min, 1),
+           temp_max_yday = lag(.data$temp_max, 1),
+           temp_mean_yday = lag(.data$temp_mean, 1)) %>% 
+    select(.data$date, .data$temp_min_yday, .data$temp_max_yday, 
+           .data$temp_mean_yday)
   
   data <- data %>% 
     inner_join(temp_stats, by = "date")
   
   # Add trend
   data <- data %>% 
-    mutate(trend = as.numeric(date),
-           trend = trend - min(trend) + 1) %>% 
-    select(-date)
+    mutate(trend = as.numeric(.data$date),
+           trend = .data$trend - min(.data$trend) + 1) %>% 
+    select(-.data$date)
   
   data
 }
@@ -86,9 +90,10 @@ add_features <- function(data) {
 #' 
 #' @importFrom dplyr select mutate slice
 #' @importFrom lubridate yday month
+#' @importFrom rlang .data
 load_pv_data <- function() {
-  pod %>% 
-    select(-demand_mw) %>% 
+  podEnergyComp::pod %>% 
+    select(-.data$demand_mw) %>% 
     add_lags(
       lags = list(
         "pv_power_mw" = 48*7,
@@ -106,9 +111,9 @@ load_pv_data <- function() {
         "solar_location6" = 1:6
       )
     ) %>% 
-    mutate(period = hh_to_period(datetime),
-           month = month(datetime),
-           yday = yday_ly_adj(datetime)) %>% 
+    mutate(period = hh_to_period(.data$datetime),
+           month = month(.data$datetime),
+           yday = yday_ly_adj(.data$datetime)) %>% 
     slice(-c(1:(48*7)))  # removes first 7 days missing week-lagged PV data
 }
 
@@ -120,9 +125,10 @@ load_pv_data <- function() {
 #' 
 #' @importFrom dplyr select mutate filter slice if_else between summarise ungroup
 #' @importFrom lubridate yday wday month ymd date
+#' @importFrom rlang .data
 load_demand_data <- function() {
-  pod %>% 
-    select(-pv_power_mw) %>% 
+  podEnergyComp::pod %>% 
+    select(-.data$pv_power_mw) %>% 
     add_lags(
       lags = list(
         "demand_mw" = 48*7,
@@ -144,16 +150,16 @@ load_demand_data <- function() {
     mutate(
       # lockdown = if_else(between(date(datetime), ymd("2020-03-23"),
       #                            ymd("2020-06-23")), 1, 0),
-      period = hh_to_period(datetime),
-      yday = yday_ly_adj(datetime),
-      wday = wday(datetime, week_start = 1)  # 1 = Monday
+      period = hh_to_period(.data$datetime),
+      yday = yday_ly_adj(.data$datetime),
+      wday = wday(.data$datetime, week_start = 1)  # 1 = Monday
     ) %>%  
     slice(-c(1:(48*7))) %>%  # removes first 7 days missing week-lagged demand data
     filter(
-      period %in% 32:42,  # FIXME: Hard coded. Train with charging periods only
-      date(datetime) != ymd("2018-05-08"),  # outlier 0 demand
-      date(datetime) != ymd("2018-05-10"),  # outlier high demand
-      date(datetime) != ymd("2018-11-04")   # outlier high demand
+      .data$period %in% 32:42,  # FIXME: Hard coded. Train with charging periods only
+      date(.data$datetime) != ymd("2018-05-08"),  # outlier 0 demand
+      date(.data$datetime) != ymd("2018-05-10"),  # outlier high demand
+      date(.data$datetime) != ymd("2018-11-04")   # outlier high demand
     )
 }
 

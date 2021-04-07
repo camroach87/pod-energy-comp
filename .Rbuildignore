@@ -1,5 +1,5 @@
 ^.*\.Rproj$
 ^\.Rproj\.user$
-^notebooks
 \.github
 ^data-raw$
+^README\.Rmd
