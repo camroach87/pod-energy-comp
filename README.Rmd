@@ -1,37 +1,41 @@
+---
+output: github_document
+---
 
 <!-- README.md is generated from README.Rmd. Edit and knit README.Rmd to update README.md. -->
 
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(
+	echo = TRUE,
+	fig.path = "man/figures/README-",
+	warning = FALSE,
+	message = FALSE
+)
+```
+
 # Presumed Open Data Energy Challenge
 
-This is the code used by the winning team “Cameron” in the Presumed Open
-Data Data Science Challenge. The challenge focused on scheduling battery
-charging to ensure most charging used energy from PV generation and
-discharging was scheduled so as to minimise peak demand in the evening.
-Team Cameron finished in first place at the conclusion of the
-competition.
+This is the code used by the winning team "Cameron" in the Presumed Open Data Data Science Challenge. The challenge focused on scheduling battery charging to ensure most charging used energy from PV generation and discharging was scheduled so as to minimise peak demand in the evening. Team Cameron finished in first place at the conclusion of the competition.
 
 ## Installation
 
-To install the `podEnergyComp` library in this repository, run the
-following code.
+To install the `podEnergyComp` library in this repository, run the following code.
 
-``` r
+```{r installation, eval=FALSE, include=TRUE}
 install.packages("devtools")
 devtools::install_github("camroach87/pod-energy-comp")
 ```
 
+
 ## Tuning demand and PV models
 
-**TODO:** The `cv_ts_folds` function was incredibly useful when tuning
-the `num_leaves` and `learning_rate` hyperparameters. I’ll add a short
-demonstration soon.
+**TODO:** The `cv_ts_folds` function was incredibly useful when tuning the `num_leaves` and `learning_rate` hyperparameters. I'll add a short demonstration soon.
 
 ## Producing a battery schedule
 
-Here is an example of how I produced the forecasts for the final round
-of the competition.
+Here is an example of how I produced the forecasts for the final round of the competition.
 
-``` r
+```{r usage}
 library(podEnergyComp)
 library(tidyverse)
 library(lubridate)
@@ -92,7 +96,7 @@ bat_df <- format_charge_data(b_sched$B)
 
 The demand and PV forecasts are shown below.
 
-``` r
+```{r plot-forecasts}
 fcst_df %>%
   select(datetime, Demand = demand_mw, PV = pv_power_mw) %>%
   pivot_longer(-datetime) %>%
@@ -104,12 +108,9 @@ fcst_df %>%
        colour = "Forecast")
 ```
 
-![](man/figures/README-plot-forecasts-1.png)<!-- -->
+The following plot shows the charging schedule and the total energy stored in the battery for each half hour of the day.
 
-The following plot shows the charging schedule and the total energy
-stored in the battery for each half hour of the day.
-
-``` r
+```{r plot-schedule}
 b_sched$B %>% 
   as_tibble(rownames = "date") %>% 
   pivot_longer(cols = -date, names_to = "period", values_to = "charge_mw") %>% 
@@ -123,9 +124,7 @@ b_sched$B %>%
        y = "Charge (MW)")
 ```
 
-![](man/figures/README-plot-schedule-1.png)<!-- -->
-
-``` r
+```{r plot-battery-energy}
 b_sched$C %>% 
   as_tibble(rownames = "date") %>% 
   pivot_longer(cols = -date, names_to = "period", values_to = "charge_mw") %>% 
@@ -139,13 +138,9 @@ b_sched$C %>%
        y = "Energy (MWh)")
 ```
 
-![](man/figures/README-plot-battery-energy-1.png)<!-- -->
+Since the completion of the competition, the actual demand and PV data has now been released. We can compare how well our battery schedule reduces the peak reduction.
 
-Since the completion of the competition, the actual demand and PV data
-has now been released. We can compare how well our battery schedule
-reduces the peak reduction.
-
-``` r
+```{r plot-outcome}
 bat_df %>%
   inner_join(fcst_df %>% 
                rename(`Demand (forecast)` = demand_mw), 
@@ -168,5 +163,3 @@ bat_df %>%
        x = "Period",
        y = "Power (MW)")
 ```
-
-![](man/figures/README-plot-outcome-1.png)<!-- -->
