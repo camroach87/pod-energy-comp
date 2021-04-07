@@ -1,5 +1,5 @@
 library(podEnergyComp)
-library(tidyverse)
+library(dplyr)
 library(lubridate)
 
 fcst_start_date <- ymd("2019-12-18")
