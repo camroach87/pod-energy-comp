@@ -29,7 +29,7 @@ test_that("demand loads correctly", {
     summarise(demand_mw = sum(demand_mw),
               .groups = "drop")
   
-  expect_equivalent(table(is.na(demand.summ))['TRUE'], 7)
+  expect_equivalent(table(is.na(demand.summ))['TRUE'], 0)
   expect_gt(min(demand.summ$demand_mw, na.rm = T), 2)
   expect_lt(max(demand.summ$demand_mw, na.rm = T), 80)
 })
