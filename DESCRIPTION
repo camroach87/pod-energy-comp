@@ -3,7 +3,6 @@ Type: Package
 Title: Battery Scheduling for Peak Demand Reduction
 Version: 0.0.1
 Author: Cameron Roach
-Maintainer: Cameron Roach
 Description: Code used by team Cameron in Presumed Open Data Data Science Challenge.
     This code schedules battery charging and discharging to maximise PV generation
     storage and also the reduction of evening peak demand. This code produced the 
