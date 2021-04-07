@@ -7,7 +7,7 @@
 add_features(data)
 }
 \arguments{
-\item{data}{}
+\item{data}{(data frame) Data with variables to create features for.}
 }
 \value{
 Data frame with additional features.
