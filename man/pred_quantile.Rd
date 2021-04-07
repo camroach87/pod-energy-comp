@@ -7,15 +7,17 @@
 pred_quantile(data, train_idx, test_idx, response_idx, alpha, ...)
 }
 \arguments{
-\item{data}{}
+\item{data}{(data frame) Data frame containing predictors, response variable `pv_power_mw` and `datetime`.}
 
-\item{train_idx}{}
+\item{train_idx}{(integer) Vector of integers specifying which rows to use for training model}
 
-\item{test_idx}{}
+\item{test_idx}{(integer) Vector of integers specifying which rows to use for testing model}
 
-\item{response_idx}{}
+\item{response_idx}{(integer) Column index of response variable in `data`.}
 
-\item{...}{}
+\item{alpha}{(numeric) Vector of quantiles 0.01-0.99.}
+
+\item{...}{Additional arguments passed to `lgb.fit`.}
 }
 \description{
 Predict quantile predictions using lightgbm

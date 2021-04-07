@@ -16,7 +16,7 @@ pred_demand_period(data, train_idx, test_idx, ...)
 \item{...}{Additional arguments passed to `lgb.fit`.}
 }
 \value{
-
+Vector of predictions.
 }
 \description{
 Predict demand with models for each period

@@ -18,7 +18,7 @@ pred_pv_quantile(data, train_idx, test_idx, alpha = seq(0.5, 0.9, 0.01), ...)
 \item{...}{Additional arguments passed to `lgb.fit`.}
 }
 \value{
-
+Vector of predictions.
 }
 \description{
 Predict PV power with quantile selection

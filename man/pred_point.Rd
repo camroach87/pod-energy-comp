@@ -7,15 +7,15 @@
 pred_point(data, train_idx, test_idx, response_idx, ...)
 }
 \arguments{
-\item{data}{}
+\item{data}{(data frame) Data frame containing predictors and response variable `demand_mw`.}
 
-\item{train_idx}{}
+\item{train_idx}{(integer) Vector of integers specifying which rows to use for training model}
 
-\item{test_idx}{}
+\item{test_idx}{(integer) Vector of integers specifying which rows to use for testing model}
 
-\item{response_idx}{}
+\item{response_idx}{(integer) Column index of response variable in `data`.}
 
-\item{...}{}
+\item{...}{Additional arguments passed to `lgb.fit`.}
 }
 \description{
 Predict point prediction using lightgbm

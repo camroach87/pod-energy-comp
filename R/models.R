@@ -5,7 +5,7 @@
 #' @param test_idx (integer) Vector of integers specifying which rows to use for testing model
 #' @param ... Additional arguments passed to `lgb.fit`.
 #'
-#' @return
+#' @return Vector of predictions.
 #' @export
 pred_demand <- function(data,
                         train_idx,
@@ -23,7 +23,7 @@ pred_demand <- function(data,
 #' @param test_idx (integer) Vector of integers specifying which rows to use for testing model
 #' @param ... Additional arguments passed to `lgb.fit`.
 #'
-#' @return
+#' @return Vector of predictions.
 #' @export
 pred_demand_period <- function(data,
                                train_idx,
@@ -56,7 +56,7 @@ pred_demand_period <- function(data,
 #' @param test_idx (integer) Vector of integers specifying which rows to use for testing model
 #' @param ... Additional arguments passed to `lgb.fit`.
 #'
-#' @return
+#' @return Vector of predictions.
 #' @export
 pred_pv <- function(data,
                     train_idx,
@@ -76,7 +76,7 @@ pred_pv <- function(data,
 #' @param alpha (numeric) Vector of quantiles 0.01-0.99.
 #' @param ... Additional arguments passed to `lgb.fit`.
 #'
-#' @return
+#' @return Vector of predictions.
 #' @export
 #' 
 #' @importFrom dplyr pull
@@ -124,11 +124,11 @@ pred_pv_quantile <- function(data,
 
 #' Predict point prediction using lightgbm
 #'
-#' @param data 
-#' @param train_idx 
-#' @param test_idx 
-#' @param response_idx 
-#' @param ... 
+#' @param data (data frame) Data frame containing predictors and response variable `demand_mw`.
+#' @param train_idx (integer) Vector of integers specifying which rows to use for training model
+#' @param test_idx (integer) Vector of integers specifying which rows to use for testing model
+#' @param response_idx (integer) Column index of response variable in `data`.
+#' @param ... Additional arguments passed to `lgb.fit`.
 #'
 #' @importFrom lightgbm lgb.train lgb.Dataset
 #' @importFrom stats predict
@@ -157,12 +157,12 @@ pred_point <- function(data, train_idx, test_idx, response_idx, ...) {
 
 #' Predict quantile predictions using lightgbm
 #'
-#' @param data 
-#' @param train_idx 
-#' @param test_idx 
-#' @param response_idx 
-#' @param alpha
-#' @param ... 
+#' @param data (data frame) Data frame containing predictors, response variable `pv_power_mw` and `datetime`.
+#' @param train_idx (integer) Vector of integers specifying which rows to use for training model
+#' @param test_idx (integer) Vector of integers specifying which rows to use for testing model
+#' @param response_idx  (integer) Column index of response variable in `data`.
+#' @param alpha (numeric) Vector of quantiles 0.01-0.99.
+#' @param ... Additional arguments passed to `lgb.fit`.
 #'
 #' @importFrom lightgbm lgb.train lgb.Dataset
 #' @importFrom stats predict

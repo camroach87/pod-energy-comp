@@ -6,7 +6,7 @@
 #'   should be specified as number of half-hourly periods, e.g., c(1, 3, 5) will
 #'   create 30, 90 and 150 minute lags.
 #'
-#' @return Data frame with additional lags
+#' @return Data frame with additional lags.
 #' @export
 #'
 #' @importFrom dplyr bind_cols select
@@ -39,9 +39,9 @@ add_lags <- function(data, lags = NULL) {
 #' Minimum, maximum and mean temperatures are calculated across all weather
 #' stations. Trend is a numeric variable increasing with date.
 #'
-#' @param data
+#' @param data (data frame) Data with variables to create features for.
 #'
-#' @return A data frame with additional variables.
+#' @return Data frame with additional features.
 #' @export
 #'
 #' @importFrom dplyr mutate select group_by summarise ungroup arrange inner_join lag
