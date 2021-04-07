@@ -41,7 +41,7 @@ add_lags <- function(data, lags = NULL) {
 #'
 #' @param data
 #'
-#' @return
+#' @return A data frame with additional variables.
 #' @export
 #'
 #' @importFrom dplyr mutate select group_by summarise ungroup arrange inner_join lag

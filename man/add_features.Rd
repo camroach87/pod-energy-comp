@@ -10,7 +10,7 @@ add_features(data)
 \item{data}{}
 }
 \value{
-
+A data frame with additional variables.
 }
 \description{
 Minimum, maximum and mean temperatures are calculated across all weather
