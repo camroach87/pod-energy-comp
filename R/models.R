@@ -91,7 +91,7 @@ pred_pv_quantile <- function(data,
   response_idx <- which(colnames(data)=="pv_power_mw")
   pred_list <- map(
     set_names(alpha), 
-    ~ pred_quantile(data, train_idx, test_idx, response_idx, alpha = .x, dots)
+    ~ predict_quantile(data, train_idx, test_idx, response_idx, alpha = .x, dots)
   )
   
   # Combine quantile predictions
@@ -163,7 +163,7 @@ predict_point <- function(data, train_idx, test_idx, response_idx, ...) {
 #' @param ... 
 #'
 #' @importFrom lightgbm lgb.train lgb.Dataset
-pred_quantile <- function(data, train_idx, test_idx, response_idx, alpha, ...) {
+predict_quantile <- function(data, train_idx, test_idx, response_idx, alpha, ...) {
   message(paste("Fitting quantile", alpha, "..."))
   
   # FIXME: this is a duplication of the above code. Convert to function.
